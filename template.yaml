@@ -60,7 +60,8 @@ Resources:
       StageName: prod
       CorsConfiguration:
         AllowOrigins:
-          - '*'
+          - 'https://teesh-art.com'
+          - 'https://www.teesh-art.com'
         AllowMethods:
           - GET
           - POST
