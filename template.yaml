@@ -62,6 +62,7 @@ Resources:
         AllowOrigins:
           - 'https://teesh-art.com'
           - 'https://www.teesh-art.com'
+          - 'https://d1x6j6gxhzrxnh.cloudfront.net'
         AllowMethods:
           - GET
           - POST
