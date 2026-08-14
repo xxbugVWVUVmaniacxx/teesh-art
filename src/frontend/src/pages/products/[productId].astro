@@ -1,0 +1,90 @@
+---
+import Base from '../../layouts/Base.astro';
+import AddToCart from '../../components/AddToCart.tsx';
+
+interface Product {
+  productId: string;
+  name: string;
+  description: string;
+  priceCents: number;
+  image: string;
+}
+
+export async function getStaticPaths() {
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
+
+  try {
+    const res = await fetch(`${API_URL}/products`);
+    if (!res.ok) return [];
+    const products: Product[] = await res.json();
+
+    return products.map((product) => ({
+      params: { productId: product.productId },
+      props: { product },
+    }));
+  } catch {
+    return [];
+  }
+}
+
+const { product } = Astro.props as { product: Product };
+
+function formatPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+---
+
+<Base title={`${product.name} — teesh-art`}>
+  <a href="/" style="display: inline-block; margin-bottom: 1rem; color: #666;">← Back</a>
+
+  <div class="product-detail">
+    <img src={product.image} alt={product.name} class="product-image" />
+    <div class="product-info">
+      <h1>{product.name}</h1>
+      <p class="price">{formatPrice(product.priceCents)}</p>
+      <p class="description">{product.description}</p>
+      <AddToCart
+        client:load
+        productId={product.productId}
+        name={product.name}
+        priceCents={product.priceCents}
+        image={product.image}
+      />
+    </div>
+  </div>
+</Base>
+
+<style>
+  .product-detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: start;
+  }
+
+  @media (max-width: 600px) {
+    .product-detail {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .product-image {
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  .product-info h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .price {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .description {
+    color: #555;
+    margin-bottom: 1.5rem;
+  }
+</style>

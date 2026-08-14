@@ -1,0 +1,10 @@
+---
+import Base from '../layouts/Base.astro';
+import CartIsland from '../components/CartIsland.tsx';
+---
+
+<Base title="Cart — teesh-art">
+  <a href="/" style="display: inline-block; margin-bottom: 1rem; color: #666;">← Back</a>
+  <h1 style="margin-bottom: 1.5rem;">Cart</h1>
+  <CartIsland client:load />
+</Base>

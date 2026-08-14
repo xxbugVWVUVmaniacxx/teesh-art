@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: teesh-art — t-shirt art e-commerce backend
+
+Parameters:
+  MediaBucket:
+    Type: String
+    Default: teesh-art-media
+  SiteUrl:
+    Type: String
+    Default: http://localhost:4321
+  StripeSecretArn:
+    Type: String
+  StripePublishableKey:
+    Type: String
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 128
+    Architectures:
+      - arm64
+
+Resources:
+  TeeshArtTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: teesh-art-data
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI-1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: project
+          Value: teesh-art
+
+  TeeshArtApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+
+  TeeshArtGetProducts:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/get-products/index.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TeeshArtTable
+          MEDIA_BUCKET: !Ref MediaBucket
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TeeshArtTable
+      Events:
+        GetAll:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref TeeshArtApi
+            Path: /products
+            Method: GET
+        GetOne:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref TeeshArtApi
+            Path: /products/{productId}
+            Method: GET
+
+  TeeshArtCheckout:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/checkout/index.handler
+      Timeout: 15
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TeeshArtTable
+          MEDIA_BUCKET: !Ref MediaBucket
+          STRIPE_SECRET_ARN: !Ref StripeSecretArn
+          SITE_URL: !Ref SiteUrl
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TeeshArtTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref StripeSecretArn
+      Events:
+        Post:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref TeeshArtApi
+            Path: /checkout
+            Method: POST
+
+  TeeshArtWebhook:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/webhook/index.handler
+      Timeout: 30
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TeeshArtTable
+          MEDIA_BUCKET: !Ref MediaBucket
+          STRIPE_SECRET_ARN: !Ref StripeSecretArn
+          SITE_URL: !Ref SiteUrl
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TeeshArtTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TeeshArtTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref StripeSecretArn
+      Events:
+        Post:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref TeeshArtApi
+            Path: /webhooks/stripe
+            Method: POST
+
+Outputs:
+  ApiUrl:
+    Description: HTTP API Gateway URL
+    Value: !Sub https://${TeeshArtApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref TeeshArtTable

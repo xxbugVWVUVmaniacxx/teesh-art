@@ -1,0 +1,90 @@
+---
+import Base from '../layouts/Base.astro';
+
+interface Product {
+  productId: string;
+  name: string;
+  priceCents: number;
+  image: string;
+}
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
+
+let products: Product[] = [];
+let fetchError = false;
+
+try {
+  const res = await fetch(`${API_URL}/products`);
+  if (res.ok) {
+    products = await res.json();
+  } else {
+    fetchError = true;
+  }
+} catch {
+  fetchError = true;
+}
+
+function formatPrice(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+---
+
+<Base>
+  <h1 style="margin-bottom: 1.5rem;">teesh-art</h1>
+
+  {fetchError || products.length === 0 ? (
+    <p>No products available</p>
+  ) : (
+    <div class="grid">
+      {products.map((product) => (
+        <a href={`/products/${product.productId}`} class="card">
+          <img src={product.image} alt={product.name} />
+          <div class="card-body">
+            <h2>{product.name}</h2>
+            <p class="price">{formatPrice(product.priceCents)}</p>
+          </div>
+        </a>
+      ))}
+    </div>
+  )}
+</Base>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .card {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    transition: box-shadow 0.2s;
+  }
+
+  .card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+
+  .card-body {
+    padding: 0.75rem;
+  }
+
+  .card-body h2 {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .price {
+    font-weight: 600;
+    color: #333;
+  }
+</style>
