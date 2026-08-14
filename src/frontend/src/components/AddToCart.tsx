@@ -32,6 +32,7 @@ export default function AddToCart({ productId, name, priceCents, image }: Props)
     }
 
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    window.dispatchEvent(new Event('cart-updated'));
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }

@@ -1,4 +1,6 @@
 ---
+import CartCount from '../components/CartCount.tsx';
+
 interface Props {
   title?: string;
 }
@@ -45,10 +47,45 @@ const { title = 'teesh-art' } = Astro.props;
         height: auto;
         display: block;
       }
+
+      .nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      .nav-brand {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .nav-cart {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 0.2s;
+      }
+
+      .nav-cart:hover {
+        background: #f0f0f0;
+      }
     </style>
   </head>
   <body>
     <div class="container">
+      <nav class="nav">
+        <a href="/" class="nav-brand">teesh-art</a>
+        <a href="/cart" class="nav-cart">
+          🛒 <CartCount client:load />
+        </a>
+      </nav>
       <slot />
     </div>
   </body>

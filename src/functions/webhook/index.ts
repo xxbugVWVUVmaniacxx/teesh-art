@@ -92,9 +92,9 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         return { statusCode: 200, body: 'Already processed' };
       }
 
-      // Retrieve full session with line items
+      // Retrieve full session with line items and shipping details
       const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-        expand: ['line_items'],
+        expand: ['line_items', 'collected_information'],
       });
 
       const now = new Date().toISOString();
@@ -106,16 +106,16 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         priceCents: li.amount_total,
       }));
 
-      const shippingDetails = fullSession.shipping_details;
-      const shippingAddress = shippingDetails?.address
+      const collectedShipping = (fullSession as any).collected_information?.shipping_details;
+      const shippingAddress = collectedShipping?.address
         ? {
-            name: shippingDetails.name ?? '',
-            line1: shippingDetails.address.line1 ?? '',
-            line2: shippingDetails.address.line2 ?? '',
-            city: shippingDetails.address.city ?? '',
-            state: shippingDetails.address.state ?? '',
-            zip: shippingDetails.address.postal_code ?? '',
-            country: shippingDetails.address.country ?? '',
+            name: collectedShipping.name ?? '',
+            line1: collectedShipping.address.line1 ?? '',
+            line2: collectedShipping.address.line2 ?? '',
+            city: collectedShipping.address.city ?? '',
+            state: collectedShipping.address.state ?? '',
+            zip: collectedShipping.address.postal_code ?? '',
+            country: collectedShipping.address.country ?? '',
           }
         : null;
 
