@@ -70,8 +70,18 @@ Resources:
 
   TeeshArtGetProducts:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        EntryPoints:
+          - index.ts
+        External:
+          - '@aws-sdk/*'
     Properties:
-      Handler: src/functions/get-products/index.handler
+      CodeUri: src/functions/get-products/
+      Handler: index.handler
       Timeout: 10
       Environment:
         Variables:
@@ -96,8 +106,16 @@ Resources:
 
   TeeshArtCheckout:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        EntryPoints:
+          - index.ts
     Properties:
-      Handler: src/functions/checkout/index.handler
+      CodeUri: src/functions/checkout/
+      Handler: index.handler
       Timeout: 15
       Environment:
         Variables:
@@ -123,8 +141,16 @@ Resources:
 
   TeeshArtWebhook:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        EntryPoints:
+          - index.ts
     Properties:
-      Handler: src/functions/webhook/index.handler
+      CodeUri: src/functions/webhook/
+      Handler: index.handler
       Timeout: 30
       Environment:
         Variables:

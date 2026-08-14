@@ -7,7 +7,7 @@ interface Product {
   name: string;
   description: string;
   priceCents: number;
-  image: string;
+  images: string[];
 }
 
 export async function getStaticPaths() {
@@ -16,7 +16,8 @@ export async function getStaticPaths() {
   try {
     const res = await fetch(`${API_URL}/products`);
     if (!res.ok) return [];
-    const products: Product[] = await res.json();
+    const data = await res.json();
+    const products: Product[] = data.products;
 
     return products.map((product) => ({
       params: { productId: product.productId },
@@ -38,7 +39,7 @@ function formatPrice(cents: number): string {
   <a href="/" style="display: inline-block; margin-bottom: 1rem; color: #666;">← Back</a>
 
   <div class="product-detail">
-    <img src={product.image} alt={product.name} class="product-image" />
+    <img src={product.images[0]} alt={product.name} class="product-image" />
     <div class="product-info">
       <h1>{product.name}</h1>
       <p class="price">{formatPrice(product.priceCents)}</p>
@@ -48,7 +49,7 @@ function formatPrice(cents: number): string {
         productId={product.productId}
         name={product.name}
         priceCents={product.priceCents}
-        image={product.image}
+        image={product.images[0]}
       />
     </div>
   </div>

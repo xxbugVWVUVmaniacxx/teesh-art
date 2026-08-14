@@ -5,7 +5,7 @@ interface Product {
   productId: string;
   name: string;
   priceCents: number;
-  image: string;
+  images: string[];
 }
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
@@ -16,7 +16,7 @@ let fetchError = false;
 try {
   const res = await fetch(`${API_URL}/products`);
   if (res.ok) {
-    products = await res.json();
+    products = (await res.json()).products;
   } else {
     fetchError = true;
   }
@@ -38,7 +38,7 @@ function formatPrice(cents: number): string {
     <div class="grid">
       {products.map((product) => (
         <a href={`/products/${product.productId}`} class="card">
-          <img src={product.image} alt={product.name} />
+          <img src={product.images[0]} alt={product.name} />
           <div class="card-body">
             <h2>{product.name}</h2>
             <p class="price">{formatPrice(product.priceCents)}</p>
