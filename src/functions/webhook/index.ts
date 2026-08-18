@@ -92,10 +92,21 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         return { statusCode: 200, body: 'Already processed' };
       }
 
-      // Retrieve full session with line items and shipping details
-      const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
-        expand: ['line_items', 'collected_information'],
-      });
+      // Retrieve full session with line items and shipping details.
+      // Falls back to event data when session can't be fetched (e.g., synthetic stripe trigger events).
+      let fullSession: Stripe.Checkout.Session;
+      try {
+        fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ['line_items', 'collected_information'],
+        });
+      } catch (retrieveErr: any) {
+        if (retrieveErr?.statusCode === 404) {
+          console.warn('Session not found via retrieve, using event payload:', session.id);
+          fullSession = session;
+        } else {
+          throw retrieveErr;
+        }
+      }
 
       const now = new Date().toISOString();
       const orderId = generateOrderId();

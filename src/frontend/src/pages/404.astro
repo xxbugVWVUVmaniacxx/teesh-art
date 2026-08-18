@@ -1,0 +1,52 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Not Found — teesh-art">
+  <div class="error-page">
+    <h1>404</h1>
+    <p class="message">Page not found</p>
+    <p class="detail">The page you're looking for doesn't exist or has been moved.</p>
+    <a href="/" class="home-link">← Back to shop</a>
+  </div>
+</Base>
+
+<style>
+  .error-page {
+    text-align: center;
+    padding: 4rem 1rem;
+  }
+
+  h1 {
+    font-size: 4rem;
+    font-weight: 800;
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+  }
+
+  .message {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.75rem;
+  }
+
+  .detail {
+    color: #666;
+    margin-bottom: 2rem;
+  }
+
+  .home-link {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  .home-link:hover {
+    background: #333;
+  }
+</style>
