@@ -69,44 +69,26 @@ export default function CartIsland() {
 
   return (
     <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div className="cart-items">
         {cart.map((item) => (
-          <div
-            key={item.productId}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '1rem',
-              padding: '0.75rem',
-              background: '#fff',
-              border: '1px solid #e0e0e0',
-              borderRadius: '6px',
-            }}
-          >
+          <div key={item.productId} className="cart-item">
             <img
               src={item.image}
               alt={item.name}
-              style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px' }}
+              className="cart-item-image"
             />
-            <div style={{ flex: 1 }}>
+            <div className="cart-item-info">
               <strong>{item.name}</strong>
-              <div style={{ color: '#555', fontSize: '0.875rem' }}>
+              <div className="cart-item-meta">
                 Qty: {item.quantity} × {formatPrice(item.priceCents)}
               </div>
             </div>
-            <span style={{ fontWeight: 600 }}>
+            <span className="cart-item-price">
               {formatPrice(item.priceCents * item.quantity)}
             </span>
             <button
               onClick={() => removeItem(item.productId)}
-              style={{
-                background: 'none',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                padding: '0.25rem 0.5rem',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-              }}
+              className="cart-item-remove"
             >
               Remove
             </button>
@@ -114,28 +96,19 @@ export default function CartIsland() {
         ))}
       </div>
 
-      <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e0e0e0', paddingTop: '1rem' }}>
-        <p style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>
+      <div className="cart-footer">
+        <p className="cart-total">
           Total: {formatPrice(total)}
         </p>
 
         {error && (
-          <p style={{ color: '#dc2626', marginBottom: '1rem' }}>{error}</p>
+          <p className="cart-error">{error}</p>
         )}
 
         <button
           onClick={handleCheckout}
           disabled={loading}
-          style={{
-            padding: '0.75rem 1.5rem',
-            fontSize: '1rem',
-            fontWeight: 600,
-            background: loading ? '#999' : '#1a1a1a',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
+          className={`cart-checkout-btn ${loading ? 'cart-checkout-btn--loading' : ''}`}
         >
           {loading ? 'Processing...' : 'Checkout'}
         </button>

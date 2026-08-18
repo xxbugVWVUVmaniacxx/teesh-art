@@ -40,17 +40,7 @@ export default function AddToCart({ productId, name, priceCents, image }: Props)
   return (
     <button
       onClick={handleClick}
-      style={{
-        padding: '0.75rem 1.5rem',
-        fontSize: '1rem',
-        fontWeight: 600,
-        background: added ? '#22c55e' : '#1a1a1a',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '6px',
-        cursor: 'pointer',
-        transition: 'background 0.2s',
-      }}
+      className={`add-to-cart-btn ${added ? 'add-to-cart-btn--added' : ''}`}
     >
       {added ? 'Added!' : 'Add to Cart'}
     </button>

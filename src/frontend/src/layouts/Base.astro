@@ -29,12 +29,13 @@ const { title = 'teesh-art' } = Astro.props;
         line-height: 1.5;
         color: #1a1a1a;
         background: #fafafa;
+        -webkit-text-size-adjust: 100%;
       }
 
       .container {
         max-width: 960px;
         margin: 0 auto;
-        padding: 2rem 1rem;
+        padding: 1.5rem 1rem;
       }
 
       a {
@@ -75,6 +76,20 @@ const { title = 'teesh-art' } = Astro.props;
 
       .nav-cart:hover {
         background: #f0f0f0;
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 1rem 0.75rem;
+        }
+
+        .nav {
+          margin-bottom: 1rem;
+        }
+
+        .nav-brand {
+          font-size: 1.1rem;
+        }
       }
     </style>
   </head>
