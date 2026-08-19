@@ -91,6 +91,35 @@ const { title = 'teesh-art' } = Astro.props;
           font-size: 1.1rem;
         }
       }
+
+      .site-footer {
+        margin-top: 3rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e0e0e0;
+        text-align: center;
+      }
+
+      .footer-links {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .footer-links a {
+        color: #666;
+        font-size: 0.85rem;
+        transition: color 0.2s;
+      }
+
+      .footer-links a:hover {
+        color: #1a1a1a;
+      }
+
+      .footer-copy {
+        color: #999;
+        font-size: 0.75rem;
+      }
     </style>
   </head>
   <body>
@@ -102,6 +131,14 @@ const { title = 'teesh-art' } = Astro.props;
         </a>
       </nav>
       <slot />
+      <footer class="site-footer">
+        <div class="footer-links">
+          <a href="/refund">Refund Policy</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+        </div>
+        <p class="footer-copy">© 2026 teesh-art</p>
+      </footer>
     </div>
   </body>
 </html>
