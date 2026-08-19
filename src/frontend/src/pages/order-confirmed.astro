@@ -3,9 +3,48 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Order Confirmed — teesh-art">
-  <div style="text-align: center; padding: 3rem 0;">
-    <h1 style="margin-bottom: 1rem;">🎉 Order Confirmed</h1>
+  <div class="confirmation">
+    <h1>🎉 Order Confirmed</h1>
     <p>Your order has been placed! Thank you.</p>
-    <a href="/" style="display: inline-block; margin-top: 1.5rem; color: #666;">← Continue shopping</a>
+    <p class="note">You'll receive a confirmation email shortly.</p>
+    <a href="/" class="continue">← Continue shopping</a>
   </div>
 </Base>
+
+<script>
+  // Clear cart after successful checkout
+  localStorage.removeItem('teesh-art-cart');
+  window.dispatchEvent(new Event('cart-updated'));
+</script>
+
+<style>
+  .confirmation {
+    text-align: center;
+    padding: 3rem 0;
+  }
+
+  .confirmation h1 {
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .confirmation p {
+    color: #333;
+    margin-bottom: 0.5rem;
+  }
+
+  .note {
+    color: #666;
+    font-size: 0.9rem;
+  }
+
+  .continue {
+    display: inline-block;
+    margin-top: 1.5rem;
+    color: #666;
+  }
+
+  .continue:hover {
+    color: #1a1a1a;
+  }
+</style>
