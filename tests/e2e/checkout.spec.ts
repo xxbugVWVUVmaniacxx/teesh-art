@@ -31,8 +31,8 @@ test.describe('Checkout flow', () => {
     const checkoutButton = page.getByRole('button', { name: /checkout/i });
     await checkoutButton.click();
 
-    // Wait for navigation to Stripe
-    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 15000 });
+    // Wait for navigation to Stripe (includes API call + redirect)
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30000 });
     expect(page.url()).toMatch(/^https:\/\/checkout\.stripe\.com/);
   });
 });

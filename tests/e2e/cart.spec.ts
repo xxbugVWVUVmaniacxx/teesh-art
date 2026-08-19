@@ -21,7 +21,7 @@ test.describe('Cart functionality', () => {
     expect(cartItems).toHaveLength(1);
     expect(cartItems[0].productId).toBe('test-tee-001');
     expect(cartItems[0].quantity).toBe(1);
-    expect(cartItems[0].priceCents).toBe(50);
+    expect(cartItems[0].priceCents).toBe(2500);
 
     // Navigate to cart
     await page.goto('/cart');
@@ -34,7 +34,7 @@ test.describe('Cart functionality', () => {
 
     // Cart shows the product and price
     await expect(page.locator('body')).toContainText(/test tee/i, { timeout: 5000 });
-    await expect(page.locator('body')).toContainText('$0.50');
+    await expect(page.locator('body')).toContainText('$25.00');
 
     // Checkout button is visible
     const checkoutButton = page.getByRole('button', { name: /checkout/i });

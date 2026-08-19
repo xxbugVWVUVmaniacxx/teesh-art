@@ -6,5 +6,6 @@ export default defineConfig({
   use: {
     baseURL: process.env.TEST_SITE_URL || 'https://d1x6j6gxhzrxnh.cloudfront.net',
     headless: true,
+    browserName: 'firefox',
   },
 });
