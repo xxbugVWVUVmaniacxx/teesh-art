@@ -28,6 +28,7 @@ All application data lives in a single DynamoDB table using a single-table desig
 | Partition key | `PK` (String) |
 | Sort key | `SK` (String) |
 | GSI-1 | `GSI1PK` / `GSI1SK` |
+| Point-in-Time Recovery | Enabled |
 
 ### Entity schemas
 
@@ -101,10 +102,8 @@ Line items are stored as a list within the Order entity. At current scale (singl
 ### Base URL
 
 ```
-https://api.teesh-art.com  (→ API Gateway HTTP API → CloudFront custom domain, later)
+https://api.teesh-art.com  (→ API Gateway HTTP API → CloudFront custom domain)
 ```
-
-During development: `https://<api-id>.execute-api.us-east-1.amazonaws.com`
 
 ### Endpoints
 
@@ -198,12 +197,13 @@ Receives Stripe webhook events. Not called by the frontend.
 **Headers:** `Stripe-Signature` (verified by Lambda)
 
 **Handled events:**
-- `checkout.session.completed` → Create order record, trigger fulfillment
+- `checkout.session.completed` → Create order record, send confirmation email via SES (Simple Email Service), trigger fulfillment
 - `checkout.session.expired` → No action (log only)
 
 **Response:** `200` (always, to avoid Stripe retries on non-retriable errors)
 
 **Lambda:** `teesh-art-webhook`
+**Notes:** Email sending is non-blocking — failures are logged but do not affect order creation or the 200 response to Stripe.
 
 ---
 
@@ -257,7 +257,8 @@ Webhook Lambda:
   1. Verifies Stripe signature
   2. Retrieves full session (including shipping address)
   3. Writes Order to DynamoDB (status: "paid")
-  4. Triggers fulfillment (future: calls provider API)
+  4. Sends confirmation email via SES (non-blocking)
+  5. Triggers fulfillment (future: calls provider API)
 ```
 
 ### Key design decisions
@@ -308,7 +309,7 @@ Webhook Lambda:
 
 | State | Meaning | Trigger |
 |-------|---------|---------|
-| `paid` | Stripe confirmed payment. Order recorded in DynamoDB. | `checkout.session.completed` webhook |
+| `paid` | Stripe confirmed payment. Order recorded in DynamoDB. Confirmation email sent. | `checkout.session.completed` webhook |
 | `submitted` | Order sent to fulfillment provider. | Fulfillment API call returns success |
 | `in_production` | Provider confirmed the order is being manufactured. | Provider webhook/poll (future) |
 | `shipped` | Provider shipped the product. Tracking number available. | Provider webhook/poll (future) |
@@ -320,6 +321,10 @@ Webhook Lambda:
 - `paid → submitted`: Automatic. The webhook Lambda that creates the order immediately attempts to submit to the fulfillment provider. If the provider integration isn't built yet, the order stays in `paid` and a manual process handles it.
 - `submitted → in_production → shipped → delivered`: Driven by the fulfillment provider's callbacks (webhook or polling).
 - `Any → failed`: Triggered by payment disputes (Stripe webhook) or fulfillment failures.
+
+### Post-payment actions
+
+After writing the order to DynamoDB, the webhook Lambda sends a confirmation email to the customer via Amazon SES. This is non-blocking — if SES fails, the error is logged but the order is still created and a 200 is returned to Stripe. SES is currently in sandbox mode (verified recipients only).
 
 ### Provider-agnostic design
 
@@ -333,17 +338,27 @@ The fulfillment submission is isolated in a single function: `submitToFulfillmen
 
 - **Framework:** Astro v4+
 - **Interactive islands:** React (via `@astrojs/react`)
-- **Styling:** TBD (Tailwind CSS is the likely choice for utility-first speed)
+- **Styling:** CSS with responsive breakpoints at 480px and 600px
 - **Build output:** Static HTML/CSS/JS → deployed to S3
+- **Build requirement:** Node.js 22
 
 ### Page structure
 
 ```
-/                       → Catalog page (infinite scroll grid of products)
+/                       → Catalog page (grid of products)
 /products/:productId    → Product detail page (template, filled with product data)
 /cart                   → Cart page (React island, client-side state)
-/order-confirmed        → Post-purchase confirmation (reads session_id from URL)
+/order-confirmed        → Post-purchase confirmation (reads session_id from URL, clears cart)
+/error                  → Generic error page
+/404                    → Not found page
+/refund                 → Refund policy
+/privacy                → Privacy policy
+/terms                  → Terms of service
 ```
+
+### Site-wide layout
+
+All pages include a footer with links to policy pages (/refund, /privacy, /terms).
 
 ### Data flow
 
@@ -358,6 +373,7 @@ Runtime (React islands):
   2. "Add to cart" button updates localStorage + React state
   3. "Checkout" button calls POST /checkout with cart contents
   4. Redirect to Stripe Checkout URL
+  5. On /order-confirmed, cart is cleared from localStorage
 ```
 
 ### Island boundaries
@@ -372,12 +388,12 @@ Runtime (React islands):
 
 ### Build trigger
 
-When a product is added/updated in DynamoDB, a rebuild of the static site is needed. Options (evaluated in CI/CD section):
+When a product is added/updated in DynamoDB, a rebuild of the static site is needed. Options:
 
-1. Manual: operator runs deploy command
-2. Automated: DynamoDB Stream → Lambda → triggers GitHub Actions / CodePipeline build
+1. Manual: operator runs deploy command or triggers workflow dispatch
+2. Automated: DynamoDB Stream → Lambda → triggers GitHub Actions build
 
-Start with option 1. Automate when the manual step becomes friction.
+Currently using option 1 (manual dispatch via GitHub Actions).
 
 ---
 
@@ -387,16 +403,26 @@ Start with option 1. Automate when the manual step becomes friction.
 
 | Resource | Logical name | Purpose |
 |----------|-------------|---------|
-| DynamoDB table | `TeeshArtData` | Single-table for products + orders |
+| DynamoDB table | `TeeshArtData` | Single-table for products + orders (PITR enabled) |
 | S3 bucket (static) | `TeeshArtStatic` | Hosts built Astro site |
 | S3 bucket (media) | `TeeshArtMedia` | Product images |
-| CloudFront distribution | `TeeshArtCDN` | Serves static site + media, terminates TLS |
+| CloudFront distribution | `TeeshArtCDN` | Serves static site + media, terminates TLS, custom error responses |
 | API Gateway (HTTP API) | `TeeshArtApi` | Routes API requests to Lambda |
 | Lambda: get-products | `GetProductsFunction` | Serves product data |
 | Lambda: checkout | `CheckoutFunction` | Creates Stripe sessions |
-| Lambda: webhook | `WebhookFunction` | Processes Stripe webhooks |
+| Lambda: webhook | `WebhookFunction` | Processes Stripe webhooks, sends confirmation emails |
 | IAM role | `TeeshArtLambdaRole` | Scoped permissions for Lambda execution |
 | Secrets Manager | `TeeshArtStripeSecrets` | Stripe API key + webhook secret |
+| SNS topic | `TeeshArtAlarms` | Alarm notification target (email subscription) |
+| CloudWatch alarms | (5 alarms) | Error/latency/throttle monitoring |
+| SES domain | `teesh-art.com` | Verified domain with DKIM for transactional email (sandbox) |
+
+### CloudFront custom error responses
+
+| HTTP Error Code | Response Page | TTL |
+|-----------------|--------------|-----|
+| 403 | `/404.html` | 60s |
+| 404 | `/404.html` | 60s |
 
 ### IAM permissions (least-privilege)
 
@@ -408,6 +434,8 @@ Policies:
       - dynamodb:PutItem, dynamodb:UpdateItem (webhook function only)
   - SecretsManager:
       - secretsmanager:GetSecretValue (checkout + webhook functions)
+  - SES:
+      - ses:SendEmail (webhook function only)
   - S3:
       - s3:GetObject on teesh-art-media/* (get-products for signed URLs, if needed)
   - CloudWatch Logs:
@@ -421,6 +449,10 @@ Policies:
 | get-products | Node.js 20.x | 128 MB | 10s | API Gateway GET /products, GET /products/{id} |
 | checkout | Node.js 20.x | 128 MB | 15s | API Gateway POST /checkout |
 | webhook | Node.js 20.x | 128 MB | 30s | API Gateway POST /webhooks/stripe |
+
+### Build configuration
+
+The webhook Lambda uses esbuild with `External: ['@aws-sdk/*']` to exclude the AWS SDK (provided by the Lambda runtime) from the bundle.
 
 ### Environment variables
 
@@ -465,10 +497,11 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 
 **Steps:**
 1. Checkout code
-2. Install Node.js dependencies for each Lambda function
-3. `sam build`
-4. `sam deploy --no-confirm-changeset --stack-name teesh-art`
-5. Output API Gateway URL
+2. Set up Node.js 22
+3. Install Node.js dependencies for each Lambda function
+4. `sam build`
+5. `sam deploy --no-confirm-changeset --stack-name teesh-art`
+6. Output API Gateway URL
 
 #### 2. `deploy-site.yml` — Frontend deployment
 
@@ -476,28 +509,38 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 
 **Steps:**
 1. Checkout code
-2. Install frontend dependencies
-3. Fetch product data from API (build-time data fetching)
-4. `npm run build` (Astro generates static site)
-5. Sync `dist/` to S3 static bucket
-6. Invalidate CloudFront cache
+2. Set up Node.js 22
+3. Install frontend dependencies
+4. Fetch product data from API (build-time data fetching)
+5. `npm run build` (Astro generates static site)
+6. Sync `dist/` to S3 static bucket
+7. Invalidate CloudFront cache
 
 #### 3. `test.yml` — PR validation
 
 **Trigger:** Pull request to `main`
 
 **Steps:**
-1. Lint (ESLint)
+1. Set up Node.js 22
 2. Type check (tsc --noEmit)
-3. Unit tests (Vitest)
+3. Run API tests (Vitest — 9 tests against live deployed stack)
+
+### Tests
+
+| Type | Framework | Count | Target |
+|------|-----------|-------|--------|
+| API tests | Vitest | 9 | Live deployed stack |
+| E2E tests | Playwright (Firefox) | 4 | Live deployed stack |
+
+The test suite runs against the actual deployed infrastructure, not mocks.
 
 ### Secrets (GitHub Actions)
 
 | Secret | Purpose |
 |--------|---------|
-| `AWS_ACCESS_KEY_ID` | SAM deploy |
-| `AWS_SECRET_ACCESS_KEY` | SAM deploy |
-| `AWS_REGION` | Deployment target |
+| `AWS_ACCESS_KEY_ID` | SAM deploy + S3 sync |
+| `AWS_SECRET_ACCESS_KEY` | SAM deploy + S3 sync |
+| `STRIPE_PUBLISHABLE_KEY` | Frontend build (baked into static site) |
 
 Future improvement: Replace static credentials with OIDC (OpenID Connect) federation for GitHub Actions → AWS. No long-lived keys.
 
@@ -522,25 +565,24 @@ All Lambda functions log structured JSON to CloudWatch Logs:
 
 Log groups follow the pattern: `/aws/lambda/teesh-art-<function-name>`
 
-### Metrics to watch
+### CloudWatch Alarms
 
-| Metric | Source | Alarm threshold |
-|--------|--------|-----------------|
-| Lambda errors (5xx) | CloudWatch Lambda metrics | > 3 in 5 minutes |
-| Lambda duration | CloudWatch Lambda metrics | p95 > 5s (indicates cold start or downstream issue) |
-| API Gateway 4xx rate | CloudWatch APIGW metrics | > 50% of requests (indicates broken client or attack) |
-| DynamoDB throttling | CloudWatch DynamoDB metrics | Any throttled requests |
-| Stripe webhook failures | Application logs (structured) | Any failed verification |
+| Alarm name | Metric | Threshold | Period |
+|------------|--------|-----------|--------|
+| `teesh-art-checkout-errors` | Checkout Lambda errors | > 0 | 5 minutes |
+| `teesh-art-webhook-errors` | Webhook Lambda errors | > 0 | 5 minutes |
+| `teesh-art-api-5xx` | API Gateway 5xx count | > 0 | 5 minutes |
+| `teesh-art-dynamo-throttle` | DynamoDB throttled requests | > 0 | 5 minutes |
+| `teesh-art-checkout-duration` | Checkout Lambda p95 duration | > 5000ms | 5 minutes |
 
 ### Alerting
 
-**Phase 1 (launch):** CloudWatch Alarms → SNS → Email notification.
-
-**Phase 2 (scale):** Add a dashboard in CloudWatch with key metrics. Consider PagerDuty or Opsgenie if uptime SLA matters.
+**SNS topic:** `teesh-art-alarms`
+**Notification:** Email subscription. All 5 alarms publish to this topic.
 
 ### What we don't monitor (yet)
 
-- Frontend performance (add once site is live — consider CloudWatch RUM or a lightweight alternative)
+- Frontend performance (consider CloudWatch RUM or a lightweight alternative)
 - Business metrics (daily orders, revenue) — derive from DynamoDB queries when needed
 - Fulfillment provider health — depends on provider selection
 
@@ -559,6 +601,7 @@ Log groups follow the pattern: `/aws/lambda/teesh-art-<function-name>`
 | Lambda | $0 | Free tier covers 1M requests + 400K GB-seconds/month |
 | API Gateway | $0 | First 1M requests free (HTTP API) |
 | Secrets Manager | ~$0.40 | $0.40/secret/month |
+| SES | $0 | Free tier covers 200 emails/day (sandbox) |
 | **Total pre-revenue** | **~$2.50/month** | |
 
 ### Variable costs (per transaction)
@@ -605,12 +648,13 @@ The infrastructure cost is effectively zero at low volume. The real cost is your
 
 ## Appendix: What's deferred
 
-| Topic | Blocked on |
+| Topic | Status / Blocked on |
 |-------|-----------|
+| ~~Custom domain (teesh-art.com)~~ | ✅ Done |
+| ~~Email notifications (order confirmation)~~ | ✅ Done (SES sandbox) |
+| ~~CI/CD pipeline~~ | ✅ Done (GitHub Actions) |
 | Fulfillment provider integration | Provider selection |
 | Product variants (size, color) | Scope decision — MVP may be one-size prints |
 | Customer accounts / order history | Not needed for MVP |
 | Admin UI for product management | CLI/script approach first |
-| Custom domain (teesh-art.com) | Domain purchase + ACM certificate |
-| Email notifications (order confirmation, shipping) | SES setup, template design |
 | Analytics / conversion tracking | Post-launch priority |
