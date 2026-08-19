@@ -569,11 +569,11 @@ Log groups follow the pattern: `/aws/lambda/teesh-art-<function-name>`
 
 | Alarm name | Metric | Threshold | Period |
 |------------|--------|-----------|--------|
-| `teesh-art-checkout-errors` | Checkout Lambda errors | > 0 | 5 minutes |
-| `teesh-art-webhook-errors` | Webhook Lambda errors | > 0 | 5 minutes |
-| `teesh-art-api-5xx` | API Gateway 5xx count | > 0 | 5 minutes |
+| `teesh-art-checkout-errors` | Checkout Lambda errors | > 3 | 5 minutes |
+| `teesh-art-webhook-errors` | Webhook Lambda errors | > 3 | 5 minutes |
+| `teesh-art-api-5xx` | API Gateway 5xx count | > 5 | 5 minutes |
 | `teesh-art-dynamo-throttle` | DynamoDB throttled requests | > 0 | 5 minutes |
-| `teesh-art-checkout-duration` | Checkout Lambda p95 duration | > 5000ms | 5 minutes |
+| `teesh-art-checkout-duration` | Checkout Lambda p95 duration | > 10000ms | 5 minutes (2 consecutive) |
 
 ### Alerting
 

@@ -116,7 +116,7 @@ CloudWatch alarms → SNS → email notifications. See [LLD](docs/LLD.md) for al
 
 - [High-Level Design](docs/HLD.md) — architecture, decision rationale, cost profile
 - [Low-Level Design](docs/LLD.md) — data model, API contracts, Stripe integration, monitoring, CI/CD
-- [GitHub Project Board](https://github.com/users/radlad/projects/1) — issue tracking
+- [GitHub Project Board](https://github.com/users/xxbugVWVUVmaniacxx/projects/3) — issue tracking
 
 ## Environment variables
 
