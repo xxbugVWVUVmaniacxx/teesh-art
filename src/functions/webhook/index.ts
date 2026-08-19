@@ -1,11 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import Stripe from 'stripe';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const secretsClient = new SecretsManagerClient({});
+const sesClient = new SESClient({});
 
 const TABLE_NAME = process.env.TABLE_NAME!;
 const STRIPE_SECRET_ARN = process.env.STRIPE_SECRET_ARN!;
@@ -55,6 +57,72 @@ async function orderExistsForSession(stripeSessionId: string): Promise<boolean> 
 function submitToFulfillment(order: Record<string, unknown>): void {
   // No-op stub — will call fulfillment provider API when one is selected
   console.log('submitToFulfillment (no-op):', JSON.stringify({ orderId: order.orderId, status: order.status }));
+}
+
+async function sendOrderConfirmation(order: Record<string, unknown>): Promise<void> {
+  const email = order.customerEmail as string;
+  if (!email) {
+    console.warn('No customer email, skipping confirmation:', order.orderId);
+    return;
+  }
+
+  const orderId = order.orderId as string;
+  const items = order.items as Array<{ name: string; quantity: number; priceCents: number }>;
+  const totalCents = order.totalCents as number;
+
+  const itemLines = items
+    .map((item) => `• ${item.name} × ${item.quantity} — $${((item.priceCents ?? 0) / 100).toFixed(2)}`)
+    .join('\n');
+
+  const textBody = [
+    `Hi there!`,
+    ``,
+    `Your order ${orderId} has been confirmed. Here's a summary:`,
+    ``,
+    itemLines || '(items will appear on your receipt)',
+    ``,
+    `Total: $${(totalCents / 100).toFixed(2)}`,
+    ``,
+    `We'll send you another email once your order ships.`,
+    ``,
+    `Thanks for shopping with teesh-art!`,
+    `— teesh-art`,
+  ].join('\n');
+
+  const htmlBody = [
+    `<h2>Order Confirmed</h2>`,
+    `<p>Hi there!</p>`,
+    `<p>Your order <strong>${orderId}</strong> has been confirmed.</p>`,
+    `<table style="border-collapse:collapse;margin:1rem 0;">`,
+    ...items.map(
+      (item) =>
+        `<tr><td style="padding:4px 12px 4px 0;">${item.name} × ${item.quantity}</td><td style="padding:4px 0;">$${((item.priceCents ?? 0) / 100).toFixed(2)}</td></tr>`
+    ),
+    `<tr style="border-top:1px solid #ccc;"><td style="padding:8px 12px 4px 0;font-weight:bold;">Total</td><td style="padding:8px 0;font-weight:bold;">$${(totalCents / 100).toFixed(2)}</td></tr>`,
+    `</table>`,
+    `<p>We'll send you another email once your order ships.</p>`,
+    `<p>Thanks for shopping with teesh-art!</p>`,
+  ].join('');
+
+  try {
+    await sesClient.send(
+      new SendEmailCommand({
+        Source: 'orders@teesh-art.com',
+        Destination: { ToAddresses: [email] },
+        Message: {
+          Subject: { Data: `Order Confirmed — ${orderId}` },
+          Body: {
+            Text: { Data: textBody },
+            Html: { Data: htmlBody },
+          },
+        },
+      })
+    );
+    console.log('Confirmation email sent to:', email);
+  } catch (err) {
+    // Don't fail the order if email fails — log and continue
+    console.error('Failed to send confirmation email:', err);
+  }
 }
 
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
@@ -154,6 +222,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       );
 
       console.log('Order created:', orderId);
+      await sendOrderConfirmation(order);
       submitToFulfillment(order);
     } else {
       console.log('Unhandled event type:', stripeEvent.type);

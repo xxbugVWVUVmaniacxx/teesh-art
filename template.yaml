@@ -152,6 +152,8 @@ Resources:
         Target: es2022
         EntryPoints:
           - index.ts
+        External:
+          - '@aws-sdk/*'
     Properties:
       CodeUri: src/functions/webhook/
       Handler: index.handler
@@ -172,6 +174,10 @@ Resources:
               Action:
                 - secretsmanager:GetSecretValue
               Resource: !Ref StripeSecretArn
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: 'arn:aws:ses:us-east-1:411974344834:identity/teesh-art.com'
       Events:
         Post:
           Type: HttpApi
