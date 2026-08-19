@@ -23,12 +23,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install function dependencies
-        run: |
-          cd src/functions/checkout && npm ci
-          cd ../webhook && npm ci
-          cd ../get-products && npm ci
-
       - uses: aws-actions/setup-sam@v2
 
       - uses: aws-actions/configure-aws-credentials@v4

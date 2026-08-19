@@ -12,16 +12,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install root dependencies
         run: npm ci
-
-      - name: Install function dependencies
-        run: |
-          cd src/functions/checkout && npm ci
-          cd ../webhook && npm ci
-          cd ../get-products && npm ci
 
       - name: Install frontend dependencies
         run: cd src/frontend && npm ci
@@ -39,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
