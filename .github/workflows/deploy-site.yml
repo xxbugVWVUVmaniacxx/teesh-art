@@ -1,0 +1,43 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/frontend/**'
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: cd src/frontend && npm ci
+
+      - name: Build site
+        run: cd src/frontend && npm run build
+        env:
+          PUBLIC_API_URL: https://73ei0iwg46.execute-api.us-east-1.amazonaws.com/prod
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        run: aws s3 sync src/frontend/dist/ s3://teesh-art-static-411974344834/ --delete
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id E1NGP5JN1ZI2TE --paths "/*"
