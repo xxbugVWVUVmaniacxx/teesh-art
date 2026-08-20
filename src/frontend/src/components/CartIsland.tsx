@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 interface CartItem {
   productId: string;
+  size: string;
   name: string;
   priceCents: number;
   image: string;
@@ -23,10 +24,29 @@ export default function CartIsland() {
     }
   }, []);
 
-  function removeItem(productId: string) {
-    const updated = cart.filter((item) => item.productId !== productId);
+  function persistCart(updated: CartItem[]) {
     setCart(updated);
     localStorage.setItem(CART_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new Event('cart-updated'));
+  }
+
+  function removeItem(productId: string, size: string) {
+    const updated = cart.filter(
+      (item) => !(item.productId === productId && item.size === size)
+    );
+    persistCart(updated);
+  }
+
+  function updateQuantity(productId: string, size: string, delta: number) {
+    const updated = cart
+      .map((item) => {
+        if (item.productId === productId && item.size === size) {
+          return { ...item, quantity: item.quantity + delta };
+        }
+        return item;
+      })
+      .filter((item) => item.quantity > 0);
+    persistCart(updated);
   }
 
   function formatPrice(cents: number): string {
@@ -44,7 +64,7 @@ export default function CartIsland() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: cart.map(({ productId, quantity }) => ({ productId, quantity })),
+          items: cart.map(({ productId, size, quantity }) => ({ productId, size, quantity })),
         }),
       });
 
@@ -71,23 +91,40 @@ export default function CartIsland() {
     <div>
       <div className="cart-items">
         {cart.map((item) => (
-          <div key={item.productId} className="cart-item">
+          <div key={`${item.productId}::${item.size}`} className="cart-item">
             <img
               src={item.image}
               alt={item.name}
               className="cart-item-image"
             />
             <div className="cart-item-info">
-              <strong>{item.name}</strong>
+              <strong>{item.name} — {item.size}</strong>
               <div className="cart-item-meta">
-                Qty: {item.quantity} × {formatPrice(item.priceCents)}
+                <span className="cart-qty-controls">
+                  <button
+                    onClick={() => updateQuantity(item.productId, item.size, -1)}
+                    className="cart-qty-btn"
+                    aria-label={`Decrease quantity of ${item.name} ${item.size}`}
+                  >
+                    −
+                  </button>
+                  <span className="cart-qty-value">{item.quantity}</span>
+                  <button
+                    onClick={() => updateQuantity(item.productId, item.size, 1)}
+                    className="cart-qty-btn"
+                    aria-label={`Increase quantity of ${item.name} ${item.size}`}
+                  >
+                    +
+                  </button>
+                </span>
+                <span className="cart-item-unit-price">× {formatPrice(item.priceCents)}</span>
               </div>
             </div>
             <span className="cart-item-price">
               {formatPrice(item.priceCents * item.quantity)}
             </span>
             <button
-              onClick={() => removeItem(item.productId)}
+              onClick={() => removeItem(item.productId, item.size)}
               className="cart-item-remove"
             >
               Remove

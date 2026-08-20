@@ -7,6 +7,7 @@ interface Product {
   description: string;
   priceCents: number;
   images: string[];
+  sizes: Record<string, { available: boolean }>;
 }
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';

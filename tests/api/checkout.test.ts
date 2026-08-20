@@ -12,7 +12,7 @@ describe('POST /checkout', () => {
     const res = await fetch(`${API_URL}/checkout`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ items: [{ productId: 'test-tee-001', quantity: 1 }] }),
+      body: JSON.stringify({ items: [{ productId: 'test-tee-001', size: 'M', quantity: 1 }] }),
     });
 
     expect(res.status).toBe(200);
@@ -26,10 +26,47 @@ describe('POST /checkout', () => {
     const res = await fetch(`${API_URL}/checkout`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ items: [{ productId: 'does-not-exist', quantity: 1 }] }),
+      body: JSON.stringify({ items: [{ productId: 'does-not-exist', size: 'M', quantity: 1 }] }),
     });
 
     expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for missing size', async () => {
+    const res = await fetch(`${API_URL}/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ items: [{ productId: 'test-tee-001', quantity: 1 }] }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/size/i);
+  });
+
+  it('returns 400 for invalid size code', async () => {
+    const res = await fetch(`${API_URL}/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ items: [{ productId: 'test-tee-001', size: 'XXL', quantity: 1 }] }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/size/i);
+  });
+
+  it('returns 400 for unavailable size', async () => {
+    // test-tee-002 has XL unavailable per seed data
+    const res = await fetch(`${API_URL}/checkout`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ items: [{ productId: 'test-tee-002', size: 'XL', quantity: 1 }] }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/unavailable/i);
   });
 
   it('returns 400 for an empty items array', async () => {

@@ -14,12 +14,13 @@ test.describe('Cart functionality', () => {
     const addButton = page.getByRole('button', { name: /add to cart/i });
     await addButton.click();
 
-    // Verify item was added to localStorage
+    // Verify item was added to localStorage with size
     const cart = await page.evaluate(() => localStorage.getItem('teesh-art-cart'));
     expect(cart).not.toBeNull();
     const cartItems = JSON.parse(cart!);
     expect(cartItems).toHaveLength(1);
     expect(cartItems[0].productId).toBe('test-tee-001');
+    expect(cartItems[0].size).toBe('M');
     expect(cartItems[0].quantity).toBe(1);
     expect(cartItems[0].priceCents).toBe(2500);
 
@@ -32,8 +33,9 @@ test.describe('Cart functionality', () => {
       return islands.length > 0 && Array.from(islands).every(i => !i.hasAttribute('ssr'));
     }, { timeout: 15000 });
 
-    // Cart shows the product and price
-    await expect(page.locator('body')).toContainText(/test tee/i, { timeout: 5000 });
+    // Cart shows the product with size and price
+    await expect(page.locator('body')).toContainText(/neon skull tee/i, { timeout: 5000 });
+    await expect(page.locator('body')).toContainText('— M');
     await expect(page.locator('body')).toContainText('$25.00');
 
     // Checkout button is visible

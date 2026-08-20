@@ -1,6 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
-import AddToCart from '../../components/AddToCart.tsx';
+import ProductActions from '../../components/ProductActions.tsx';
 
 interface Product {
   productId: string;
@@ -8,6 +8,7 @@ interface Product {
   description: string;
   priceCents: number;
   images: string[];
+  sizes: Record<string, { available: boolean }>;
 }
 
 export async function getStaticPaths() {
@@ -44,12 +45,13 @@ function formatPrice(cents: number): string {
       <h1>{product.name}</h1>
       <p class="price">{formatPrice(product.priceCents)}</p>
       <p class="description">{product.description}</p>
-      <AddToCart
+      <ProductActions
         client:load
         productId={product.productId}
         name={product.name}
         priceCents={product.priceCents}
         image={product.images[0]}
+        sizes={product.sizes}
       />
     </div>
   </div>
@@ -103,6 +105,49 @@ function formatPrice(cents: number): string {
 </style>
 
 <style is:global>
+  .product-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .size-selector {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+
+  .size-pill {
+    min-width: 40px;
+    height: 36px;
+    padding: 0 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid #1a1a1a;
+    background: transparent;
+    color: #1a1a1a;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .size-pill:hover:not(.size-pill--unavailable):not(.size-pill--selected) {
+    background: #f0f0f0;
+  }
+
+  .size-pill--selected {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+
+  .size-pill--unavailable {
+    background: #f0f0f0;
+    color: #aaa;
+    border-color: #e0e0e0;
+    cursor: not-allowed;
+  }
+
   .add-to-cart-btn {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
@@ -112,11 +157,16 @@ function formatPrice(cents: number): string {
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, opacity 0.2s;
   }
 
-  .add-to-cart-btn:hover {
+  .add-to-cart-btn:hover:not(:disabled) {
     background: #333;
+  }
+
+  .add-to-cart-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .add-to-cart-btn--added {
@@ -131,5 +181,41 @@ function formatPrice(cents: number): string {
     .add-to-cart-btn {
       width: 100%;
     }
+  }
+
+  .cart-qty-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .cart-qty-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .cart-qty-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .cart-qty-value {
+    min-width: 1.5rem;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .cart-item-unit-price {
+    margin-left: 0.5rem;
+    color: #666;
   }
 </style>

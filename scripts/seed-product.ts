@@ -1,8 +1,9 @@
 /**
- * Seed script — writes a test product to DynamoDB.
+ * Seed script — writes 6 products with size variants to DynamoDB.
+ * Uses PutCommand to overwrite existing items (delete-and-reseed).
  *
  * Usage:
- *   npx tsx scripts/seed-product.ts
+ *   AWS_PROFILE=cairn npx tsx scripts/seed-product.ts
  *
  * Environment variables:
  *   TABLE_NAME   — DynamoDB table name (default: teesh-art-data)
@@ -29,6 +30,57 @@ function parseArgs(args: string[]): Record<string, string> {
   return result;
 }
 
+const products = [
+  {
+    productId: "test-tee-001",
+    name: "Neon Skull Tee",
+    description: "A glowing skull design on premium black cotton.",
+    priceCents: 2500,
+    sizes: { S: { available: true }, M: { available: true }, L: { available: true }, XL: { available: true } },
+    images: ["https://placehold.co/600x600/111/0f0?text=Neon+Skull"],
+  },
+  {
+    productId: "test-tee-002",
+    name: "Vaporwave Sunset",
+    description: "Retro gradient sunset with palm silhouettes.",
+    priceCents: 2800,
+    sizes: { S: { available: true }, M: { available: true }, L: { available: true }, XL: { available: false } },
+    images: ["https://placehold.co/600x600/301934/ff6fd8?text=Vaporwave"],
+  },
+  {
+    productId: "test-tee-003",
+    name: "Minimal Cat",
+    description: "Single-line cat illustration on white.",
+    priceCents: 2500,
+    sizes: { S: { available: false }, M: { available: true }, L: { available: true }, XL: { available: true } },
+    images: ["https://placehold.co/600x600/fff/222?text=Cat"],
+  },
+  {
+    productId: "test-tee-004",
+    name: "Glitch Grid",
+    description: "Digital artifact pattern in cyan and magenta.",
+    priceCents: 3000,
+    sizes: { S: { available: true }, M: { available: true }, L: { available: true }, XL: { available: true } },
+    images: ["https://placehold.co/600x600/0a0a2a/0ff?text=Glitch"],
+  },
+  {
+    productId: "test-tee-005",
+    name: "Mountain Line",
+    description: "Continuous line drawing of a mountain range.",
+    priceCents: 2700,
+    sizes: { S: { available: true }, M: { available: false }, L: { available: true }, XL: { available: true } },
+    images: ["https://placehold.co/600x600/f5f0e8/333?text=Mountain"],
+  },
+  {
+    productId: "test-tee-006",
+    name: "404 Tee",
+    description: "Design not found.",
+    priceCents: 3200,
+    sizes: { S: { available: false }, M: { available: false }, L: { available: false }, XL: { available: false } },
+    images: ["https://placehold.co/600x600/333/c00?text=404"],
+  },
+];
+
 async function main() {
   const flags = parseArgs(process.argv.slice(2));
 
@@ -37,7 +89,6 @@ async function main() {
 
   const clientConfig: ConstructorParameters<typeof DynamoDBClient>[0] = { region };
   if (flags.profile) {
-    // Setting AWS_PROFILE for the credential provider chain
     process.env.AWS_PROFILE = flags.profile;
   }
 
@@ -46,30 +97,35 @@ async function main() {
 
   const now = new Date().toISOString();
 
-  const item = {
-    PK: "PRODUCT#test-tee-001",
-    SK: "METADATA",
-    GSI1PK: "PRODUCTS",
-    GSI1SK: now,
-    productId: "test-tee-001",
-    name: "Test Tee",
-    description: "A minimal test product for validating the purchase flow.",
-    priceCents: 50,
-    currency: "usd",
-    images: ["https://placehold.co/600x600/222/fff?text=Test+Tee"],
-    status: "active",
-    createdAt: now,
-    updatedAt: now,
-  };
+  for (const product of products) {
+    const item = {
+      PK: `PRODUCT#${product.productId}`,
+      SK: "METADATA",
+      GSI1PK: "PRODUCTS",
+      GSI1SK: now,
+      productId: product.productId,
+      name: product.name,
+      description: product.description,
+      priceCents: product.priceCents,
+      currency: "usd",
+      images: product.images,
+      sizes: product.sizes,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    };
 
-  await docClient.send(
-    new PutCommand({
-      TableName: tableName,
-      Item: item,
-    })
-  );
+    await docClient.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: item,
+      })
+    );
 
-  console.log(`✓ Seeded product: ${item.productId} → ${tableName} (${region})`);
+    console.log(`✓ Seeded: ${product.productId} — ${product.name}`);
+  }
+
+  console.log(`\n✓ All ${products.length} products seeded → ${tableName} (${region})`);
 }
 
 main().catch((err) => {

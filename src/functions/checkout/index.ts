@@ -29,8 +29,11 @@ async function getStripe(): Promise<Stripe> {
 
 interface CartItem {
   productId: string;
+  size: string;
   quantity: number;
 }
+
+const VALID_SIZES = ['S', 'M', 'L', 'XL'] as const;
 
 interface Product {
   productId: string;
@@ -38,6 +41,7 @@ interface Product {
   priceCents: number;
   currency: string;
   images: string[];
+  sizes: Record<string, { available: boolean }>;
 }
 
 function response(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
@@ -71,6 +75,10 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         return response(400, { error: `Invalid item: ${JSON.stringify(item)}` });
       }
 
+      if (!item.size || !VALID_SIZES.includes(item.size as typeof VALID_SIZES[number])) {
+        return response(400, { error: `Invalid or missing size for product ${item.productId}. Must be one of: S, M, L, XL` });
+      }
+
       const result = await dynamoClient.send(
         new GetCommand({
           TableName: TABLE_NAME,
@@ -82,7 +90,13 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         return response(400, { error: `Product not found: ${item.productId}` });
       }
 
-      products.push(result.Item as unknown as Product);
+      const product = result.Item as unknown as Product;
+
+      if (!product.sizes?.[item.size]?.available) {
+        return response(400, { error: `Size ${item.size} is unavailable for product ${item.productId}` });
+      }
+
+      products.push(product);
     }
 
     // Build Stripe line items from DB prices (never trust client prices)
@@ -90,7 +104,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       price_data: {
         currency: products[i].currency,
         product_data: {
-          name: products[i].name,
+          name: `${products[i].name} (${item.size})`,
           images: products[i].images.length > 0 ? [products[i].images[0]] : undefined,
         },
         unit_amount: products[i].priceCents,
