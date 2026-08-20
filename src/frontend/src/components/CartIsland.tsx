@@ -95,7 +95,6 @@ export default function CartIsland() {
       }
 
       const { checkoutUrl } = await res.json();
-      localStorage.removeItem(CART_KEY);
       window.location.href = checkoutUrl;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed');
