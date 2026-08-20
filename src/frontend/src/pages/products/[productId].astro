@@ -219,3 +219,13 @@ function formatPrice(cents: number): string {
     color: #666;
   }
 </style>
+
+<script is:inline define:vars={{ productId: product.productId, productName: product.name, priceCents: product.priceCents }}>
+  if (typeof gtag !== 'undefined') {
+    gtag('event', 'view_item', {
+      currency: 'USD',
+      value: priceCents / 100,
+      items: [{ item_id: productId, item_name: productName, price: priceCents / 100 }]
+    });
+  }
+</script>

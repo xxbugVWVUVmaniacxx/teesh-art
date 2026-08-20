@@ -39,6 +39,15 @@ export default function AddToCart({ productId, name, priceCents, image, selected
 
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
     window.dispatchEvent(new Event('cart-updated'));
+
+    if (typeof window.gtag !== 'undefined') {
+      window.gtag('event', 'add_to_cart', {
+        currency: 'USD',
+        value: priceCents / 100,
+        items: [{ item_id: productId, item_name: name, item_variant: selectedSize, price: priceCents / 100, quantity: 1 }]
+      });
+    }
+
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
   }

@@ -59,6 +59,20 @@ export default function CartIsland() {
     setError('');
     setLoading(true);
 
+    if (typeof window.gtag !== 'undefined') {
+      window.gtag('event', 'begin_checkout', {
+        currency: 'USD',
+        value: total / 100,
+        items: cart.map((item) => ({
+          item_id: item.productId,
+          item_name: item.name,
+          item_variant: item.size,
+          price: item.priceCents / 100,
+          quantity: item.quantity,
+        })),
+      });
+    }
+
     try {
       const res = await fetch(`${API_URL}/checkout`, {
         method: 'POST',

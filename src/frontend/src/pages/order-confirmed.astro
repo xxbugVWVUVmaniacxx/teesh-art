@@ -15,6 +15,18 @@ import Base from '../layouts/Base.astro';
   // Clear cart after successful checkout
   localStorage.removeItem('teesh-art-cart');
   window.dispatchEvent(new Event('cart-updated'));
+
+  // Fire GA4 purchase event
+  if (typeof gtag !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    if (sessionId) {
+      gtag('event', 'purchase', {
+        transaction_id: sessionId,
+        currency: 'USD',
+      });
+    }
+  }
 </script>
 
 <style>
