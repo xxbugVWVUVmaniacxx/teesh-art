@@ -20,7 +20,14 @@ export default function CartIsland() {
   useEffect(() => {
     const raw = localStorage.getItem(CART_KEY);
     if (raw) {
-      setCart(JSON.parse(raw));
+      // Filter out stale items from before size variants were added
+      const parsed: CartItem[] = JSON.parse(raw);
+      const valid = parsed.filter((item) => item.size);
+      if (valid.length !== parsed.length) {
+        localStorage.setItem(CART_KEY, JSON.stringify(valid));
+        window.dispatchEvent(new Event('cart-updated'));
+      }
+      setCart(valid);
     }
   }, []);
 
