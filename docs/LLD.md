@@ -51,6 +51,7 @@ Represents a t-shirt design available for purchase.
 | `status` | String | `active` \| `draft` \| `archived` |
 | `createdAt` | String (ISO 8601) | `2026-08-10T00:00:00Z` |
 | `updatedAt` | String (ISO 8601) | `2026-08-12T14:30:00Z` |
+| `sizes` | Map | `{ "S": { "available": true }, "M": { "available": true }, "L": { "available": true }, "XL": { "available": false } }` |
 
 #### Order
 
@@ -93,7 +94,6 @@ Line items are stored as a list within the Order entity. At current scale (singl
 |---------|-------|
 | Orders by customer email | Add GSI-2 if needed |
 | Orders by status | Filter on GSI-1 query (acceptable at low volume) |
-| Product variants (size, color) | Extend product schema with variants list |
 
 ---
 
@@ -122,6 +122,7 @@ Returns all active products for the catalog.
       "priceCents": 2500,
       "currency": "usd",
       "images": ["https://cdn.teesh-art.com/tee-001/front.png"],
+      "sizes": { "S": { "available": true }, "M": { "available": true }, "L": { "available": true }, "XL": { "available": true } },
       "createdAt": "2026-08-10T00:00:00Z"
     }
   ]
@@ -146,6 +147,7 @@ Returns a single product by ID.
   "priceCents": 2500,
   "currency": "usd",
   "images": ["https://cdn.teesh-art.com/tee-001/front.png"],
+  "sizes": { "S": { "available": true }, "M": { "available": true }, "L": { "available": true }, "XL": { "available": true } },
   "status": "active",
   "createdAt": "2026-08-10T00:00:00Z"
 }
@@ -168,7 +170,7 @@ Creates a Stripe Checkout Session and returns the URL for redirect.
 ```json
 {
   "items": [
-    { "productId": "tee-001", "quantity": 1 }
+    { "productId": "tee-001", "size": "M", "quantity": 1 }
   ]
 }
 ```
@@ -186,7 +188,7 @@ Creates a Stripe Checkout Session and returns the URL for redirect.
 ```
 
 **Lambda:** `teesh-art-checkout`
-**Notes:** Validates product IDs against DynamoDB, constructs Stripe line items from stored prices (never trusts client-provided prices), creates CheckoutSession with shipping address collection enabled.
+**Notes:** Validates product IDs against DynamoDB, constructs Stripe line items from stored prices (never trusts client-provided prices), creates CheckoutSession with shipping address collection enabled. Validates that the requested size exists and is available for each product.
 
 ---
 
@@ -383,8 +385,23 @@ Runtime (React islands):
 | Product grid | Static (Astro) | No interactivity needed — just HTML |
 | Product detail content | Static (Astro) | Same — static rendering |
 | "Add to cart" button | React island | Needs client-side state interaction |
+| Size selector | React island | Interactive selection, feeds into cart |
 | Cart page | React island | Dynamic — reads/writes localStorage, calls checkout API |
+| Cart quantity controls | React island (within cart) | +/- quantity, remove items |
 | Checkout button | React island (within cart) | Triggers API call |
+| Nav cart badge | React island | Listens for localStorage changes across tabs |
+
+### Shared libraries
+
+Common code is extracted into `src/frontend/src/lib/`:
+
+| Module | Exports | Used by |
+|--------|---------|---------|
+| `types.ts` | `CartItem`, `Product` | All components and pages |
+| `cart.ts` | `CART_KEY`, `getCart()`, `setCart()` | CartIsland, AddToCart, CartCount |
+| `format.ts` | `formatPrice()` | CartIsland, index.astro, [productId].astro |
+| `sizes.ts` | `SIZE_DISPLAY_ORDER`, `SIZE_DEFAULT_PREFERENCE` | SizeSelector, ProductActions |
+| `gtag.d.ts` | `Window.gtag` type | CartIsland, AddToCart |
 
 ### Build trigger
 
@@ -405,7 +422,6 @@ Currently using option 1 (manual dispatch via GitHub Actions).
 |----------|-------------|---------|
 | DynamoDB table | `TeeshArtData` | Single-table for products + orders (PITR enabled) |
 | S3 bucket (static) | `TeeshArtStatic` | Hosts built Astro site |
-| S3 bucket (media) | `TeeshArtMedia` | Product images |
 | CloudFront distribution | `TeeshArtCDN` | Serves static site + media, terminates TLS, custom error responses |
 | API Gateway (HTTP API) | `TeeshArtApi` | Routes API requests to Lambda |
 | Lambda: get-products | `GetProductsFunction` | Serves product data |
@@ -450,18 +466,19 @@ Policies:
 | checkout | Node.js 20.x | 128 MB | 15s | API Gateway POST /checkout |
 | webhook | Node.js 20.x | 128 MB | 30s | API Gateway POST /webhooks/stripe |
 
+All functions share CodeUri `src/functions/` with individual entry points. This allows shared `lib/` imports while maintaining independent deployment artifacts.
+
 ### Build configuration
 
-The webhook Lambda uses esbuild with `External: ['@aws-sdk/*']` to exclude the AWS SDK (provided by the Lambda runtime) from the bundle.
+All three Lambda functions use esbuild with `External: ['@aws-sdk/*']` to exclude the AWS SDK from the bundle (provided by the Lambda runtime). Source code is organized under a shared `src/functions/` CodeUri with per-function entry points. A shared `lib/` directory provides common utilities (response helper, type definitions) that esbuild bundles into each function independently.
 
 ### Environment variables
 
 | Variable | Source | Functions |
 |----------|--------|-----------|
-| `TABLE_NAME` | SAM parameter | All |
-| `STRIPE_SECRET_ARN` | Secrets Manager ARN | checkout, webhook |
-| `MEDIA_BUCKET` | SAM parameter | get-products |
-| `SITE_URL` | SAM parameter | checkout (for success/cancel URLs) |
+| `TABLE_NAME` | SAM !Ref | All |
+| `STRIPE_SECRET_ARN` | SAM parameter | checkout, webhook |
+| `SITE_URL` | SAM parameter | checkout, webhook |
 
 ### SAM template structure
 
@@ -470,15 +487,30 @@ teesh-art/
 ├── template.yaml          # SAM template (all resources)
 ├── src/
 │   ├── functions/
-│   │   ├── get-products/  # Lambda handler + deps
-│   │   ├── checkout/      # Lambda handler + deps
-│   │   └── webhook/       # Lambda handler + deps
-│   └── frontend/          # Astro project
-├── docs/
-│   ├── HLD.md
-│   └── LLD.md
-└── scripts/
-    └── seed-product.ts    # Script to add products to DynamoDB
+│   │   ├── lib/
+│   │   │   ├── response.ts   # Shared API response helper
+│   │   │   └── types.ts      # Shared Product type
+│   │   ├── package.json      # Shared deps (stripe only)
+│   │   ├── get-products/
+│   │   │   └── index.ts
+│   │   ├── checkout/
+│   │   │   └── index.ts
+│   │   └── webhook/
+│   │       └── index.ts
+│   └── frontend/
+│       └── src/
+│           ├── lib/           # Shared types, cart, format, sizes
+│           ├── components/    # React islands
+│           ├── pages/         # Astro pages
+│           └── layouts/       # Base layout
+├── scripts/
+│   └── seed-product.ts
+├── tests/
+│   ├── api/                   # 12 API tests (Vitest)
+│   └── e2e/                   # 4 E2E tests (Playwright)
+└── docs/
+    ├── HLD.md
+    └── LLD.md
 ```
 
 ---
@@ -498,10 +530,9 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 **Steps:**
 1. Checkout code
 2. Set up Node.js 22
-3. Install Node.js dependencies for each Lambda function
-4. `sam build`
-5. `sam deploy --no-confirm-changeset --stack-name teesh-art`
-6. Output API Gateway URL
+3. `sam build`
+4. `sam deploy --no-confirm-changeset --stack-name teesh-art`
+5. Output API Gateway URL
 
 #### 2. `deploy-site.yml` — Frontend deployment
 
@@ -523,13 +554,13 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 **Steps:**
 1. Set up Node.js 22
 2. Type check (tsc --noEmit)
-3. Run API tests (Vitest — 9 tests against live deployed stack)
+3. Run API tests (Vitest — 12 tests against live deployed stack)
 
 ### Tests
 
 | Type | Framework | Count | Target |
 |------|-----------|-------|--------|
-| API tests | Vitest | 9 | Live deployed stack |
+| API tests | Vitest | 12 | Live deployed stack |
 | E2E tests | Playwright (Firefox) | 4 | Live deployed stack |
 
 The test suite runs against the actual deployed infrastructure, not mocks.
@@ -540,7 +571,6 @@ The test suite runs against the actual deployed infrastructure, not mocks.
 |--------|---------|
 | `AWS_ACCESS_KEY_ID` | SAM deploy + S3 sync |
 | `AWS_SECRET_ACCESS_KEY` | SAM deploy + S3 sync |
-| `STRIPE_PUBLISHABLE_KEY` | Frontend build (baked into static site) |
 
 Future improvement: Replace static credentials with OIDC (OpenID Connect) federation for GitHub Actions → AWS. No long-lived keys.
 
@@ -654,7 +684,7 @@ The infrastructure cost is effectively zero at low volume. The real cost is your
 | ~~Email notifications (order confirmation)~~ | ✅ Done (SES sandbox) |
 | ~~CI/CD pipeline~~ | ✅ Done (GitHub Actions) |
 | Fulfillment provider integration | Provider selection |
-| Product variants (size, color) | Scope decision — MVP may be one-size prints |
+| ~~Product variants (size, color)~~ | ✅ Done (sizes: S/M/L/XL with per-product availability) |
 | Customer accounts / order history | Not needed for MVP |
 | Admin UI for product management | CLI/script approach first |
-| Analytics / conversion tracking | Post-launch priority |
+| ~~Analytics / conversion tracking~~ | ✅ Done (GA4 e-commerce funnel events) |

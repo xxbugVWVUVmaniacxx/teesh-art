@@ -120,7 +120,9 @@ All pages include a site footer with links to policy pages.
 | IaC | SAM | Lightest tool for Lambda + API Gateway + DynamoDB. Deploys via CloudFormation under the hood. |
 | Fulfillment | Pluggable provider | Architecture doesn't hard-code a printer. Provider is selected at integration time and called via a Lambda. |
 | Email | SES | Native AWS integration, no additional vendor. Domain-verified sending from orders@teesh-art.com. |
-| CI/CD | GitHub Actions | Three workflows: `deploy-infra.yml` (SAM stack), `deploy-site.yml` (frontend to S3 + invalidation), `test.yml` (API + E2E tests). |
+| CI/CD | GitHub Actions | Three workflows: `deploy-infra.yml` (SAM stack), `deploy-site.yml` (frontend to S3 + invalidation), `test.yml` (TypeScript check + API tests on PR). |
+| Product variants | Size selection (S/M/L/XL) | Simple variant model stored per-product. Checkout validates availability server-side. |
+| Analytics | GA4 (Google Analytics 4) | E-commerce funnel events tracked client-side. No server-side analytics infrastructure needed. |
 | Monitoring | CloudWatch Alarms → SNS | Catches Lambda errors, API 5xx responses, DynamoDB throttling, and slow checkouts. Alerts delivered via email. |
 | Budget control | AWS Budgets | $25/month budget with email alerts at 80% and 100% thresholds. |
 
@@ -156,8 +158,8 @@ DynamoDB Point-in-Time Recovery (PITR) is enabled, providing continuous backups 
 - Fulfillment provider selection and API integration (Phase 3 — research in progress)
 - Authentication (if an admin interface is added later)
 - SES production access (currently in sandbox mode — must request before go-live with real customers)
-- Product variants (sizes, colors) beyond basic sizing
-- SEO optimization and analytics (Phase 5)
+- ~~Product variants (sizes, colors) beyond basic sizing~~ ✅ Done (S/M/L/XL with per-product availability)
+- ~~SEO optimization and analytics (Phase 5)~~ ✅ Done (GA4 e-commerce funnel events)
 
 ## Resource naming
 
