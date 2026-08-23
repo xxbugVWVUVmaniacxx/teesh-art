@@ -8,6 +8,9 @@ dist/
 # SAM
 .aws-sam/
 
+# Test artifacts
+test-results/
+
 # Environment & secrets — NEVER commit
 .env
 .env.*
