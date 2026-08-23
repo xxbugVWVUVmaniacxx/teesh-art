@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import SizeSelector from './SizeSelector';
 import AddToCart from './AddToCart';
+import { SIZE_DEFAULT_PREFERENCE } from '../lib/sizes';
 
 interface Props {
   productId: string;
@@ -10,10 +11,8 @@ interface Props {
   sizes: Record<string, { available: boolean }>;
 }
 
-const SIZE_ORDER = ['M', 'L', 'XL', 'S'] as const;
-
 function getDefaultSize(sizes: Record<string, { available: boolean }>): string | null {
-  for (const size of SIZE_ORDER) {
+  for (const size of SIZE_DEFAULT_PREFERENCE) {
     if (sizes[size]?.available) return size;
   }
   return null;

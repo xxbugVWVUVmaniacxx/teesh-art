@@ -1,14 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
-
-interface Product {
-  productId: string;
-  name: string;
-  description: string;
-  priceCents: number;
-  images: string[];
-  sizes: Record<string, { available: boolean }>;
-}
+import type { Product } from '../lib/types';
+import { formatPrice } from '../lib/format';
 
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -24,10 +17,6 @@ try {
   }
 } catch {
   fetchError = true;
-}
-
-function formatPrice(cents: number): string {
-  return `$${Math.round(cents / 100)}`;
 }
 ---
 

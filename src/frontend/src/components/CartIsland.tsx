@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
+import type { CartItem } from '../lib/types';
+import { CART_KEY } from '../lib/cart';
+import { formatPrice } from '../lib/format';
 
-interface CartItem {
-  productId: string;
-  size: string;
-  name: string;
-  priceCents: number;
-  image: string;
-  quantity: number;
-}
-
-const CART_KEY = 'teesh-art-cart';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function CartIsland() {
@@ -54,10 +47,6 @@ export default function CartIsland() {
       })
       .filter((item) => item.quantity > 0);
     persistCart(updated);
-  }
-
-  function formatPrice(cents: number): string {
-    return `$${(cents / 100).toFixed(2)}`;
   }
 
   const total = cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);

@@ -1,13 +1,6 @@
 import { useState } from 'react';
-
-interface CartItem {
-  productId: string;
-  size: string;
-  name: string;
-  priceCents: number;
-  image: string;
-  quantity: number;
-}
+import type { CartItem } from '../lib/types';
+import { CART_KEY } from '../lib/cart';
 
 interface Props {
   productId: string;
@@ -17,8 +10,6 @@ interface Props {
   selectedSize: string | null;
   disabled: boolean;
 }
-
-const CART_KEY = 'teesh-art-cart';
 
 export default function AddToCart({ productId, name, priceCents, image, selectedSize, disabled }: Props) {
   const [added, setAdded] = useState(false);

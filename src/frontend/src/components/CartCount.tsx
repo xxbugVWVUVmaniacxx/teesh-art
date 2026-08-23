@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-
-const CART_KEY = 'teesh-art-cart';
+import { CART_KEY } from '../lib/cart';
 
 export default function CartCount() {
   const [count, setCount] = useState(0);

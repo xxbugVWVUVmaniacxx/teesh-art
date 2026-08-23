@@ -1,10 +1,10 @@
+import { SIZE_DISPLAY_ORDER } from '../lib/sizes';
+
 interface Props {
   sizes: Record<string, { available: boolean }>;
   selectedSize: string | null;
   onSizeChange: (size: string) => void;
 }
-
-const SIZE_DISPLAY_ORDER = ['S', 'M', 'L', 'XL'] as const;
 
 export default function SizeSelector({ sizes, selectedSize, onSizeChange }: Props) {
   return (
