@@ -3,6 +3,8 @@ import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import Stripe from 'stripe';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { response } from '../lib/response';
+import type { Product } from '../lib/types';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const secretsClient = new SecretsManagerClient({});
@@ -34,26 +36,6 @@ interface CartItem {
 }
 
 const VALID_SIZES = ['S', 'M', 'L', 'XL'] as const;
-
-interface Product {
-  productId: string;
-  name: string;
-  priceCents: number;
-  currency: string;
-  images: string[];
-  sizes: Record<string, { available: boolean }>;
-}
-
-function response(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
-  return {
-    statusCode,
-    headers: {
-      'content-type': 'application/json',
-      'access-control-allow-origin': '*',
-    },
-    body: JSON.stringify(body),
-  };
-}
 
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   try {

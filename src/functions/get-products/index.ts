@@ -1,23 +1,13 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { response } from '../lib/response';
+import type { Product } from '../lib/types';
 
 const client = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const TABLE_NAME = process.env.TABLE_NAME!;
 
 const INTERNAL_KEYS = ['PK', 'SK', 'GSI1PK', 'GSI1SK'] as const;
-
-interface Product {
-  productId: string;
-  name: string;
-  description: string;
-  priceCents: number;
-  currency: string;
-  images: string[];
-  status: 'active' | 'draft' | 'archived';
-  createdAt: string;
-  updatedAt: string;
-}
 
 function stripInternalKeys(item: Record<string, unknown>): Product {
   const cleaned = { ...item };
@@ -25,17 +15,6 @@ function stripInternalKeys(item: Record<string, unknown>): Product {
     delete cleaned[key];
   }
   return cleaned as unknown as Product;
-}
-
-function response(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
-  return {
-    statusCode,
-    headers: {
-      'content-type': 'application/json',
-      'access-control-allow-origin': '*',
-    },
-    body: JSON.stringify(body),
-  };
 }
 
 async function listProducts(): Promise<APIGatewayProxyResultV2> {

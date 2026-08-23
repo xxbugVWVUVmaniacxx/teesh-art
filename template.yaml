@@ -3,15 +3,10 @@ Transform: AWS::Serverless-2016-10-31
 Description: teesh-art — t-shirt art e-commerce backend
 
 Parameters:
-  MediaBucket:
-    Type: String
-    Default: teesh-art-media
   SiteUrl:
     Type: String
     Default: http://localhost:4321
   StripeSecretArn:
-    Type: String
-  StripePublishableKey:
     Type: String
 
 Globals:
@@ -80,17 +75,16 @@ Resources:
         Minify: true
         Target: es2022
         EntryPoints:
-          - index.ts
+          - get-products/index.ts
         External:
           - '@aws-sdk/*'
     Properties:
-      CodeUri: src/functions/get-products/
-      Handler: index.handler
+      CodeUri: src/functions/
+      Handler: get-products/index.handler
       Timeout: 10
       Environment:
         Variables:
           TABLE_NAME: !Ref TeeshArtTable
-          MEDIA_BUCKET: !Ref MediaBucket
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref TeeshArtTable
@@ -116,15 +110,16 @@ Resources:
         Minify: true
         Target: es2022
         EntryPoints:
-          - index.ts
+          - checkout/index.ts
+        External:
+          - '@aws-sdk/*'
     Properties:
-      CodeUri: src/functions/checkout/
-      Handler: index.handler
+      CodeUri: src/functions/
+      Handler: checkout/index.handler
       Timeout: 15
       Environment:
         Variables:
           TABLE_NAME: !Ref TeeshArtTable
-          MEDIA_BUCKET: !Ref MediaBucket
           STRIPE_SECRET_ARN: !Ref StripeSecretArn
           SITE_URL: !Ref SiteUrl
       Policies:
@@ -151,17 +146,16 @@ Resources:
         Minify: true
         Target: es2022
         EntryPoints:
-          - index.ts
+          - webhook/index.ts
         External:
           - '@aws-sdk/*'
     Properties:
-      CodeUri: src/functions/webhook/
-      Handler: index.handler
+      CodeUri: src/functions/
+      Handler: webhook/index.handler
       Timeout: 30
       Environment:
         Variables:
           TABLE_NAME: !Ref TeeshArtTable
-          MEDIA_BUCKET: !Ref MediaBucket
           STRIPE_SECRET_ARN: !Ref StripeSecretArn
           SITE_URL: !Ref SiteUrl
       Policies:

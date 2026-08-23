@@ -47,5 +47,4 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
               "StripeSecretArn=arn:aws:secretsmanager:us-east-1:411974344834:secret:teesh-art-stripe-secrets-eanptC" \
-              "StripePublishableKey=${{ secrets.STRIPE_PUBLISHABLE_KEY }}" \
               "SiteUrl=https://teesh-art.com"
