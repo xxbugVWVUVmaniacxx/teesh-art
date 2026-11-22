@@ -36,6 +36,11 @@ jobs:
       - name: TypeScript check (functions)
         run: npx tsc --noEmit
 
+      # Generates .astro/types.d.ts, which declares import.meta.env.
+      - name: Generate Astro types
+        if: ${{ !cancelled() }}
+        run: cd src/frontend && npx astro sync
+
       - name: TypeScript check (frontend)
         if: ${{ !cancelled() }}
         run: cd src/frontend && npx tsc --noEmit
