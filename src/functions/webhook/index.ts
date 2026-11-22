@@ -1,8 +1,10 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import type { QueryCommandOutput } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import Stripe from 'stripe';
+import { createHash } from 'node:crypto';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -11,6 +13,8 @@ const sesClient = new SESClient({});
 
 const TABLE_NAME = process.env.TABLE_NAME!;
 const STRIPE_SECRET_ARN = process.env.STRIPE_SECRET_ARN!;
+// Stripe holds the customer's redirect for up to 10 seconds, so a slow SES can't hold up the response
+const EMAIL_TIMEOUT_MS = 5000;
 
 // Cache secrets across warm invocations
 let cachedSecrets: { stripeKey: string; webhookSecret: string } | null = null;
@@ -22,6 +26,10 @@ async function getSecrets() {
     new GetSecretValueCommand({ SecretId: STRIPE_SECRET_ARN })
   );
   const parsed = JSON.parse(result.SecretString!);
+  // An empty signing secret would let forged signatures verify
+  if (!parsed.STRIPE_SECRET_KEY || !parsed.STRIPE_WEBHOOK_SECRET) {
+    throw new Error('Stripe secret is missing a required key');
+  }
   cachedSecrets = {
     stripeKey: parsed.STRIPE_SECRET_KEY,
     webhookSecret: parsed.STRIPE_WEBHOOK_SECRET,
@@ -29,29 +37,33 @@ async function getSecrets() {
   return cachedSecrets;
 }
 
-function generateOrderId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let id = 'ord-';
-  for (let i = 0; i < 12; i++) {
-    id += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return id;
+// The same session always maps to the same key, so a conditional put can reject duplicates
+function orderIdForSession(stripeSessionId: string): string {
+  return `ord-${createHash('sha256').update(stripeSessionId).digest('hex').slice(0, 20)}`;
 }
 
+// Catches older orders with random IDs, which the conditional put can't see.
+// The filter runs after each page is read, so every page has to be checked.
 async function orderExistsForSession(stripeSessionId: string): Promise<boolean> {
-  const result = await dynamoClient.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      IndexName: 'GSI-1',
-      KeyConditionExpression: 'GSI1PK = :pk',
-      FilterExpression: 'stripeSessionId = :sid',
-      ExpressionAttributeValues: {
-        ':pk': 'ORDERS',
-        ':sid': stripeSessionId,
-      },
-    })
-  );
-  return (result.Items?.length ?? 0) > 0;
+  let startKey: Record<string, unknown> | undefined;
+  do {
+    const result: QueryCommandOutput = await dynamoClient.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI-1',
+        KeyConditionExpression: 'GSI1PK = :pk',
+        FilterExpression: 'stripeSessionId = :sid',
+        ExpressionAttributeValues: {
+          ':pk': 'ORDERS',
+          ':sid': stripeSessionId,
+        },
+        ExclusiveStartKey: startKey,
+      })
+    );
+    if (result.Items?.length) return true;
+    startKey = result.LastEvaluatedKey;
+  } while (startKey);
+  return false;
 }
 
 function submitToFulfillment(order: Record<string, unknown>): void {
@@ -116,7 +128,8 @@ async function sendOrderConfirmation(order: Record<string, unknown>): Promise<vo
             Html: { Data: htmlBody },
           },
         },
-      })
+      }),
+      { abortSignal: AbortSignal.timeout(EMAIL_TIMEOUT_MS) }
     );
     console.log('Confirmation email sent to:', email);
   } catch (err) {
@@ -141,8 +154,8 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     }
 
     const rawBody = event.isBase64Encoded
-      ? Buffer.from(event.body!, 'base64').toString('utf-8')
-      : event.body!;
+      ? Buffer.from(event.body ?? '', 'base64').toString('utf-8')
+      : event.body ?? '';
 
     let stripeEvent: Stripe.Event;
     try {
@@ -153,7 +166,10 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     }
 
     // Handle the event
-    if (stripeEvent.type === 'checkout.session.completed') {
+    if (
+      stripeEvent.type === 'checkout.session.completed' ||
+      stripeEvent.type === 'checkout.session.async_payment_succeeded'
+    ) {
       const session = stripeEvent.data.object as Stripe.Checkout.Session;
 
       // Idempotency check
@@ -164,14 +180,15 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       }
 
       // Retrieve full session with line items and shipping details.
-      // Falls back to event data when session can't be fetched (e.g., synthetic stripe trigger events).
+      // Only test-mode events may fall back to event data (synthetic stripe trigger events). In live
+      // mode a 404 means something like a wrong key, and the payload has no line items.
       let fullSession: Stripe.Checkout.Session;
       try {
         fullSession = await stripe.checkout.sessions.retrieve(session.id, {
           expand: ['line_items', 'collected_information'],
         });
       } catch (retrieveErr: any) {
-        if (retrieveErr?.statusCode === 404) {
+        if (retrieveErr?.statusCode === 404 && !stripeEvent.livemode) {
           console.warn('Session not found via retrieve, using event payload:', session.id);
           fullSession = session;
         } else {
@@ -179,8 +196,18 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         }
       }
 
+      const paymentStatus = fullSession.payment_status;
+      if (paymentStatus === 'unpaid' && stripeEvent.type === 'checkout.session.completed') {
+        // Delayed payment method: checkout.session.async_payment_succeeded creates the order
+        console.warn('Payment pending, no order created yet:', session.id);
+        return { statusCode: 200, body: 'Awaiting payment' };
+      }
+      if (paymentStatus !== 'paid' && paymentStatus !== 'no_payment_required') {
+        throw new Error(`Unexpected payment_status "${paymentStatus}" on ${stripeEvent.type} for ${session.id}`);
+      }
+
       const now = new Date().toISOString();
-      const orderId = generateOrderId();
+      const orderId = orderIdForSession(session.id);
 
       const items = (fullSession.line_items?.data ?? []).map((li) => ({
         name: li.description,
@@ -217,16 +244,32 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
         updatedAt: now,
       };
 
-      await dynamoClient.send(
-        new PutCommand({
-          TableName: TABLE_NAME,
-          Item: order,
-        })
-      );
+      try {
+        await dynamoClient.send(
+          new PutCommand({
+            TableName: TABLE_NAME,
+            Item: order,
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+      } catch (putErr) {
+        if (putErr instanceof Error && putErr.name === 'ConditionalCheckFailedException') {
+          console.log('Order already exists for session, skipping:', session.id);
+          return { statusCode: 200, body: 'Already processed' };
+        }
+        throw putErr;
+      }
 
       console.log('Order created:', orderId);
-      await sendOrderConfirmation(order);
+      try {
+        await sendOrderConfirmation(order);
+      } catch (emailErr) {
+        // The order is saved. Failing now would only cause a retry that skips the email anyway.
+        console.error('Failed to build confirmation email:', emailErr);
+      }
       submitToFulfillment(order);
+    } else if (stripeEvent.type === 'checkout.session.async_payment_failed') {
+      console.warn('Delayed payment failed, no order created:', stripeEvent.data.object.id);
     } else {
       console.log('Unhandled event type:', stripeEvent.type);
     }
@@ -234,7 +277,10 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     return { statusCode: 200, body: 'OK' };
   } catch (error) {
     console.error('Webhook handler error:', error);
-    // Return 200 to prevent Stripe from retrying on non-retriable errors
-    return { statusCode: 200, body: 'Error logged' };
+    // A warm container would otherwise repeat the failure on every retry after a key rotation
+    cachedSecrets = null;
+    // Throw rather than return a 5xx: only a throw counts towards the Lambda Errors metric.
+    // API Gateway answers 5xx and Stripe retries. The details are already logged above.
+    throw new Error('Webhook processing failed');
   }
 };
