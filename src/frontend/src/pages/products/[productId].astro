@@ -3,23 +3,15 @@ import Base from '../../layouts/Base.astro';
 import ProductActions from '../../components/ProductActions.tsx';
 import type { Product } from '../../lib/types';
 import { formatPrice } from '../../lib/format';
+import { fetchProducts } from '../../lib/products';
 
 export async function getStaticPaths() {
-  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
+  const products = await fetchProducts();
 
-  try {
-    const res = await fetch(`${API_URL}/products`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const products: Product[] = data.products;
-
-    return products.map((product) => ({
-      params: { productId: product.productId },
-      props: { product },
-    }));
-  } catch {
-    return [];
-  }
+  return products.map((product) => ({
+    params: { productId: product.productId },
+    props: { product },
+  }));
 }
 
 const { product } = Astro.props as { product: Product };

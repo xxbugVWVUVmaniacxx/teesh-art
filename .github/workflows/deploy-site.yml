@@ -54,9 +54,11 @@ jobs:
           name: site-build
           path: dist
 
-      # sync --delete would empty the live bucket if the build were empty.
-      - name: Check build is not empty
-        run: test -s dist/index.html
+      # sync --delete removes whatever the build is missing from the live bucket.
+      - name: Check build has a home page and product pages
+        run: |
+          test -s dist/index.html
+          test -n "$(find dist/products -mindepth 2 -maxdepth 2 -type f -name index.html -size +0c -print -quit)"
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
