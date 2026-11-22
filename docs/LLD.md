@@ -554,7 +554,7 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 **Steps:**
 1. Set up Node.js 22
 2. Type check (tsc --noEmit)
-3. Run API tests (Vitest — 12 tests against live deployed stack)
+3. Run read-only product API tests against the live stack (no AWS access). Checkout and webhook tests are manual.
 
 ### Tests
 
@@ -565,14 +565,16 @@ Chosen for simplicity — repo is already on GitHub, no additional service to co
 
 The test suite runs against the actual deployed infrastructure, not mocks.
 
-### Secrets (GitHub Actions)
+### AWS access (GitHub Actions)
 
-| Secret | Purpose |
-|--------|---------|
-| `AWS_ACCESS_KEY_ID` | SAM deploy + S3 sync |
-| `AWS_SECRET_ACCESS_KEY` | SAM deploy + S3 sync |
+No long-lived keys. Each deploy workflow assumes its own role through OIDC, from `main` only. The roles are defined in `infra/github-oidc.yml`.
 
-Future improvement: Replace static credentials with OIDC (OpenID Connect) federation for GitHub Actions → AWS. No long-lived keys.
+| Role | Purpose |
+|------|---------|
+| `teesh-art-github-backend-deploy` | SAM deploy of code, config and routes |
+| `teesh-art-github-site-deploy` | S3 sync + CloudFront invalidation |
+
+IAM and table changes are deployed by an admin. See [rollout and limits](github-oidc-rollout.md).
 
 ---
 

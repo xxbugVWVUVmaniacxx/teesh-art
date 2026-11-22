@@ -8,19 +8,23 @@ on:
 
   workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
+permissions: {}
 
 jobs:
-  deploy:
+  # Runs third-party package code, so it must never get id-token: write.
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Install dependencies
         run: cd src/frontend && npm ci
@@ -30,14 +34,38 @@ jobs:
         env:
           PUBLIC_API_URL: https://73ei0iwg46.execute-api.us-east-1.amazonaws.com/prod
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          name: site-build
+          path: src/frontend/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Holds AWS access: no checkout, no npm, no building.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-build
+          path: dist
+
+      # sync --delete would empty the live bucket if the build were empty.
+      - name: Check build is not empty
+        run: test -s dist/index.html
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::411974344834:role/teesh-art-github-site-deploy
+          allowed-account-ids: '411974344834'
           aws-region: us-east-1
 
       - name: Sync to S3
-        run: aws s3 sync src/frontend/dist/ s3://teesh-art-static-411974344834/ --delete
+        run: aws s3 sync dist/ s3://teesh-art-static-411974344834/ --delete
 
       - name: Invalidate CloudFront
         run: aws cloudfront create-invalidation --distribution-id E1NGP5JN1ZI2TE --paths "/*"

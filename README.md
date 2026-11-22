@@ -106,7 +106,9 @@ GitHub Actions auto-deploys on push to `main`:
 
 - **deploy-infra.yml** — triggers on changes to `template.yaml` or `src/functions/`
 - **deploy-site.yml** — triggers on changes to `src/frontend/`
-- **test.yml** — runs full test suite on PR and push
+- **test.yml** — type checks and read-only API tests on PRs (no AWS access)
+
+Deploys sign in to AWS with GitHub OIDC, with no stored keys. See [rollout and limits](docs/github-oidc-rollout.md).
 
 ## Monitoring
 
