@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "test:unit": "vitest run --config tests/vitest.unit.config.ts",
     "test:api": "vitest run --config tests/vitest.config.ts",
     "test:e2e": "playwright test --config tests/playwright.config.ts",
     "test": "npm run test:api && npm run test:e2e"

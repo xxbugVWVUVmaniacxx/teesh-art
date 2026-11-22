@@ -36,6 +36,11 @@ jobs:
       - name: TypeScript check (functions)
         run: npx tsc --noEmit
 
+      # Every AWS and Stripe call is mocked. Never touches the deployed stack.
+      - name: Webhook unit tests
+        if: ${{ !cancelled() }}
+        run: npm run test:unit
+
       # Generates .astro/types.d.ts, which declares import.meta.env.
       - name: Generate Astro types
         if: ${{ !cancelled() }}

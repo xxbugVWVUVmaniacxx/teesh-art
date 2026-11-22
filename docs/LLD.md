@@ -63,7 +63,7 @@ Represents a customer purchase.
 | `SK` | String | `METADATA` |
 | `GSI1PK` | String | `ORDERS` |
 | `GSI1SK` | String | `2026-08-13T22:00:00Z` (createdAt) |
-| `orderId` | String | `ord-abc123` |
+| `orderId` | String | `ord-` + first 20 hex characters of SHA-256 of the session ID (older orders have random IDs) |
 | `stripeSessionId` | String | `cs_live_...` |
 | `customerEmail` | String | `buyer@example.com` |
 | `shippingAddress` | Map | `{name, line1, line2, city, state, zip, country}` |
@@ -199,10 +199,12 @@ Receives Stripe webhook events. Not called by the frontend.
 **Headers:** `Stripe-Signature` (verified by Lambda)
 
 **Handled events:**
-- `checkout.session.completed` → Create order record, send confirmation email via SES (Simple Email Service), trigger fulfillment
+- `checkout.session.completed` → If `payment_status` is `paid` or `no_payment_required`: create order record, send confirmation email via SES (Simple Email Service), trigger fulfillment. If `unpaid`: no order yet
+- `checkout.session.async_payment_succeeded` → Create the order for a delayed payment, as above
+- `checkout.session.async_payment_failed` → No order (log a warning)
 - `checkout.session.expired` → No action (log only)
 
-**Response:** `200` (always, to avoid Stripe retries on non-retriable errors)
+**Response:** `200` when handled, skipped or a duplicate. `400` for a missing or invalid signature. Any other failure throws: API Gateway returns `5xx`, the Lambda Errors metric increments and Stripe retries for up to three days.
 
 **Lambda:** `teesh-art-webhook`
 **Notes:** Email sending is non-blocking — failures are logged but do not affect order creation or the 200 response to Stripe.
@@ -258,7 +260,7 @@ Stripe sends checkout.session.completed webhook to POST /webhooks/stripe
 Webhook Lambda:
   1. Verifies Stripe signature
   2. Retrieves full session (including shipping address)
-  3. Writes Order to DynamoDB (status: "paid")
+  3. If paid, writes Order to DynamoDB once (status: "paid")
   4. Sends confirmation email via SES (non-blocking)
   5. Triggers fulfillment (future: calls provider API)
 ```
@@ -270,7 +272,7 @@ Webhook Lambda:
 | Stripe Checkout (hosted page) | Eliminates PCI scope. No card data touches our infrastructure. |
 | Server-side price enforcement | Frontend sends product IDs + quantities only. Lambda looks up real prices from DynamoDB. Prevents price manipulation. |
 | Webhook as source of truth for orders | Orders are only created after confirmed payment. No "pending" orders that might never pay. |
-| Idempotency on webhook | Use `stripeSessionId` as idempotency key — if an order with that session already exists, skip creation. |
+| Idempotency on webhook | The order ID is derived from `stripeSessionId` and written with `attribute_not_exists(PK)`. A GSI-1 lookup also catches older orders with random IDs. |
 
 ### Stripe resources needed
 
@@ -279,7 +281,7 @@ Webhook Lambda:
 | API key (secret) | Server-side session creation |
 | Publishable key | Frontend redirect (not secret) |
 | Webhook signing secret | Verify webhook authenticity |
-| Webhook endpoint | Register `checkout.session.completed` and `checkout.session.expired` |
+| Webhook endpoint | Register `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed` and `checkout.session.expired` |
 
 ### Security
 
@@ -311,7 +313,7 @@ Webhook Lambda:
 
 | State | Meaning | Trigger |
 |-------|---------|---------|
-| `paid` | Stripe confirmed payment. Order recorded in DynamoDB. Confirmation email sent. | `checkout.session.completed` webhook |
+| `paid` | Stripe confirmed payment. Order recorded in DynamoDB. Confirmation email sent. | `checkout.session.completed` (paid) or `checkout.session.async_payment_succeeded` webhook |
 | `submitted` | Order sent to fulfillment provider. | Fulfillment API call returns success |
 | `in_production` | Provider confirmed the order is being manufactured. | Provider webhook/poll (future) |
 | `shipped` | Provider shipped the product. Tracking number available. | Provider webhook/poll (future) |
