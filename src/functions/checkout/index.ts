@@ -24,6 +24,7 @@ async function getStripe(): Promise<Stripe> {
   );
   const secrets = JSON.parse(result.SecretString!);
   stripeInstance = new Stripe(secrets.STRIPE_SECRET_KEY, {
+    // @ts-expect-error stripe 16.12's types only accept '2024-06-20'
     apiVersion: '2025-04-30.basil',
   });
   return stripeInstance;

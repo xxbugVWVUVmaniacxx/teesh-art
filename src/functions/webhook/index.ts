@@ -128,7 +128,10 @@ async function sendOrderConfirmation(order: Record<string, unknown>): Promise<vo
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
   try {
     const secrets = await getSecrets();
-    const stripe = new Stripe(secrets.stripeKey, { apiVersion: '2025-04-30.basil' });
+    const stripe = new Stripe(secrets.stripeKey, {
+      // @ts-expect-error stripe 16.12's types only accept '2024-06-20'
+      apiVersion: '2025-04-30.basil',
+    });
 
     // Verify webhook signature
     const signature = event.headers['stripe-signature'];
