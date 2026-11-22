@@ -72,6 +72,7 @@ Resources:
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
+        UseNpmCi: true
         Minify: true
         Target: es2022
         EntryPoints:
@@ -107,6 +108,7 @@ Resources:
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
+        UseNpmCi: true
         Minify: true
         Target: es2022
         EntryPoints:
@@ -143,6 +145,7 @@ Resources:
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
+        UseNpmCi: true
         Minify: true
         Target: es2022
         EntryPoints:

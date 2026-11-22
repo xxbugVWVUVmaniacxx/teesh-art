@@ -23,12 +23,11 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      # The Lambda runtime provides the SDK clients, so src/functions doesn't declare them.
-      # Their version matches the SDK in the root lockfile.
+      # The Lambda runtime provides the SDK clients, so they are root devDependencies.
+      # `npm ci` also fails the PR if the functions lockfile is missing or out of date,
+      # which matters because SAM silently falls back to `npm install` without one.
       - name: Install function dependencies
-        run: >-
-          cd src/functions && npm install --no-save --no-package-lock --ignore-scripts
-          @aws-sdk/client-secrets-manager@3.1110.0 @aws-sdk/client-ses@3.1110.0
+        run: cd src/functions && npm ci --ignore-scripts
 
       - name: Install frontend dependencies
         run: cd src/frontend && npm ci
