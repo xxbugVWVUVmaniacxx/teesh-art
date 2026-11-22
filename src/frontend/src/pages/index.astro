@@ -1,29 +1,15 @@
 ---
 import Base from '../layouts/Base.astro';
-import type { Product } from '../lib/types';
 import { formatPrice } from '../lib/format';
+import { fetchProducts } from '../lib/products';
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:3000';
-
-let products: Product[] = [];
-let fetchError = false;
-
-try {
-  const res = await fetch(`${API_URL}/products`);
-  if (res.ok) {
-    products = (await res.json()).products;
-  } else {
-    fetchError = true;
-  }
-} catch {
-  fetchError = true;
-}
+const products = await fetchProducts();
 ---
 
 <Base>
   <h1 class="page-title">teesh-art</h1>
 
-  {fetchError || products.length === 0 ? (
+  {products.length === 0 ? (
     <p>No products available</p>
   ) : (
     <div class="grid">
