@@ -31,8 +31,8 @@ Order matters: the roles must exist before the workflows reach `main`.
    gh workflow run deploy-infra.yml --ref main
    ```
 
-   The first run re-uploads all three functions under a new artifact prefix. It also resolves
-   `stripe@^16.12.0` afresh, because `src/functions` has no lockfile.
+   The first run re-uploads all three functions under a new artifact prefix. On 2026-11-22 it
+   also resolved `stripe@^16.12.0` afresh; `src/functions/package-lock.json` now pins those versions.
 
 5. **Delete the two AWS secrets as soon as both deploys pass:**
 
