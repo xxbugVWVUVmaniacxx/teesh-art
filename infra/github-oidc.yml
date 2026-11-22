@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: teesh-art - keyless GitHub Actions deploys (OIDC provider and two roles)
+
+# Bootstrap stack. An admin deploys it by hand; CI cannot change it.
+# See docs/github-oidc-rollout.md.
+#
+# Trust: this repo uses immutable subjects, so `sub` carries the numeric owner and repo IDs.
+# The usual `repo:owner/name:...` form never matches here. Check the prefix with:
+#   gh api repos/{owner}/{repo}/actions/oidc/customization/sub
+#
+# Scope: CI ships code, function config and routes. It cannot write IAM, change or read the
+# table, read secrets, create or delete functions, or delete the API or stack. An admin
+# deploys those changes by hand.
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  BackendDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: teesh-art-github-backend-deploy
+      Description: GitHub Actions backend deploy for teesh-art, main branch only
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:xxbugVWVUVmaniacxx@215089036/teesh-art@1333867212:ref:refs/heads/main
+                token.actions.githubusercontent.com:job_workflow_ref: xxbugVWVUVmaniacxx/teesh-art/.github/workflows/deploy-infra.yml@refs/heads/main
+      Policies:
+        - PolicyName: backend-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DeployThisStack
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:GetTemplate
+                  - cloudformation:ListStackResources
+                Resource: arn:aws:cloudformation:us-east-1:411974344834:stack/teesh-art/*
+              - Sid: UseSamTransform
+                Effect: Allow
+                Action: cloudformation:CreateChangeSet
+                Resource: arn:aws:cloudformation:us-east-1:aws:transform/Serverless-2016-10-31
+              - Sid: InspectTemplate
+                Effect: Allow
+                Action: cloudformation:GetTemplateSummary
+                Resource: '*'
+              - Sid: FindArtifacts
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-fxfjv4sbe6ip
+              # The whole bucket, because rollback reads older artifacts stored at its root.
+              - Sid: ReadArtifactsForDeployAndRollback
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-fxfjv4sbe6ip/*
+              - Sid: UploadArtifacts
+                Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:PutObject
+                Resource: arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-fxfjv4sbe6ip/teesh-art/*
+              - Sid: UpdateFunctions
+                Effect: Allow
+                Action:
+                  - lambda:AddPermission
+                  - lambda:GetFunction
+                  - lambda:GetFunctionCodeSigningConfig
+                  - lambda:GetFunctionConfiguration
+                  - lambda:GetFunctionRecursionConfig
+                  - lambda:GetPolicy
+                  - lambda:GetRuntimeManagementConfig
+                  - lambda:ListTags
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                Resource: arn:aws:lambda:us-east-1:411974344834:function:teesh-art-TeeshArt*
+              - Sid: ReadFunctionRoles
+                Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListRolePolicies
+                Resource: arn:aws:iam::411974344834:role/teesh-art-TeeshArt*
+              - Sid: PassExistingFunctionRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - arn:aws:iam::411974344834:role/teesh-art-TeeshArtCheckoutRole-VMdhO4mzDWE1
+                  - arn:aws:iam::411974344834:role/teesh-art-TeeshArtGetProductsRole-BQuEUImAda1f
+                  - arn:aws:iam::411974344834:role/teesh-art-TeeshArtWebhookRole-k30YAVtl9oNC
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: lambda.amazonaws.com
+              - Sid: UpdateApi
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                  - apigateway:PATCH
+                  - apigateway:PUT
+                Resource: arn:aws:apigateway:us-east-1::/apis/73ei0iwg46
+              - Sid: UpdateApiRoutesAndStage
+                Effect: Allow
+                Action:
+                  - apigateway:DELETE
+                  - apigateway:GET
+                  - apigateway:PATCH
+                  - apigateway:POST
+                  - apigateway:PUT
+                Resource: arn:aws:apigateway:us-east-1::/apis/73ei0iwg46/*
+              - Sid: TagApi
+                Effect: Allow
+                Action:
+                  - apigateway:GET
+                  - apigateway:POST
+                Resource: arn:aws:apigateway:us-east-1::/tags/*73ei0iwg46*
+              - Sid: DescribeTableOnly
+                Effect: Allow
+                Action:
+                  - dynamodb:DescribeContinuousBackups
+                  - dynamodb:DescribeTable
+                Resource: arn:aws:dynamodb:us-east-1:411974344834:table/teesh-art-data
+
+  SiteDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: teesh-art-github-site-deploy
+      Description: GitHub Actions static site deploy for teesh-art, main branch only
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:xxbugVWVUVmaniacxx@215089036/teesh-art@1333867212:ref:refs/heads/main
+                token.actions.githubusercontent.com:job_workflow_ref: xxbugVWVUVmaniacxx/teesh-art/.github/workflows/deploy-site.yml@refs/heads/main
+      Policies:
+        - PolicyName: site-deploy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListSite
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: arn:aws:s3:::teesh-art-static-411974344834
+              - Sid: SyncSite
+                Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:PutObject
+                Resource: arn:aws:s3:::teesh-art-static-411974344834/*
+              - Sid: InvalidateSiteCache
+                Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: arn:aws:cloudfront::411974344834:distribution/E1NGP5JN1ZI2TE
+
+Outputs:
+  BackendDeployRoleArn:
+    Value: !GetAtt BackendDeployRole.Arn
+  SiteDeployRoleArn:
+    Value: !GetAtt SiteDeployRole.Arn
