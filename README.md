@@ -85,10 +85,12 @@ npx tsx scripts/seed-products-batch.ts
 
 ### Deploy frontend
 
+Keep the `&&`: a failed build leaves `dist/` without pages, and `sync --delete` would remove them from the live site.
+
 ```bash
-cd src/frontend
-PUBLIC_API_URL=https://73ei0iwg46.execute-api.us-east-1.amazonaws.com/prod npm run build
-aws s3 sync dist/ s3://teesh-art-static-411974344834/ --delete --profile cairn
+cd src/frontend &&
+PUBLIC_API_URL=https://73ei0iwg46.execute-api.us-east-1.amazonaws.com/prod npm run build &&
+aws s3 sync dist/ s3://teesh-art-static-411974344834/ --delete --profile cairn &&
 aws cloudfront create-invalidation --distribution-id E1NGP5JN1ZI2TE --paths "/*" --profile cairn
 ```
 
