@@ -23,6 +23,13 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      # The Lambda runtime provides the SDK clients, so src/functions doesn't declare them.
+      # Their version matches the SDK in the root lockfile.
+      - name: Install function dependencies
+        run: >-
+          cd src/functions && npm install --no-save --no-package-lock --ignore-scripts
+          @aws-sdk/client-secrets-manager@3.1110.0 @aws-sdk/client-ses@3.1110.0
+
       - name: Install frontend dependencies
         run: cd src/frontend && npm ci
 
@@ -30,6 +37,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: TypeScript check (frontend)
+        if: ${{ !cancelled() }}
         run: cd src/frontend && npx tsc --noEmit
 
   # No AWS access. The checkout and webhook tests create live Stripe sessions and orders,
